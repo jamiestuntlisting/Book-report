@@ -1,4 +1,5 @@
 import type { VoiceStyleProfile, VoiceStyleProfileData } from "@/lib/types";
+import { glossaryPromptBlock } from "@/lib/stunt-glossary";
 
 // ---------------------------------------------------------------------------
 // The product's core IP: prompts that rewrite a raw transcript into polished
@@ -9,9 +10,26 @@ import type { VoiceStyleProfile, VoiceStyleProfileData } from "@/lib/types";
 export const NO_FABRICATION_RULE = `CRITICAL — NO FABRICATION:
 - Never add facts, names, dates, places, numbers, or events that are not present in the transcript(s).
 - You may fix grammar, remove filler and false starts, and reorder for narrative flow.
+- You may repair OBVIOUS speech-to-text errors of stunt-industry terms (see the glossary) when context makes the intended term clear — that is transcription repair, not new information.
 - You may NOT invent details, embellish, or "fill in" what the speaker did not say.
 - If the transcript is thin, produce a short chapter rather than padding it.
 - Every concrete claim in your output must be traceable to the transcript. When in doubt, omit.`;
+
+// Stunt vocabulary the transcriber frequently garbles; used for repair only.
+export function glossarySection(): string {
+  return `STUNT-TERM GLOSSARY (repair mis-transcriptions of these terms when context is clear; do not introduce terms the speaker didn't use):
+${glossaryPromptBlock()}`;
+}
+
+/** Renders the "always call X → Y" rule for changed/redacted names. */
+export function nameReplacementRule(
+  nameReplacements: Record<string, string> | null | undefined,
+): string {
+  const entries = Object.entries(nameReplacements ?? {});
+  if (!entries.length) return "";
+  return `\nNAME REPLACEMENTS (the author changed or redacted these names — apply them EVERYWHERE, never output the original):
+${entries.map(([from, to]) => `- "${from}" → "${to}"`).join("\n")}\n`;
+}
 
 // ---- Voice style profile ----
 
@@ -78,7 +96,11 @@ export const VOICE_PROFILE_SCHEMA = {
 
 export const CHAPTER_SYSTEM = `You are a ghostwriter who turns a person's spoken memories into polished book chapters written in the FIRST PERSON, in that exact person's voice. You imitate how they talk — their rhythm, vocabulary, and humor — so the reader hears them on the page.
 
+Each chapter is a JOURNAL ENTRY: a diary-style story told from the speaker's own perspective. The story can be ABOUT someone else, but it is always the speaker telling it — what they saw, did, thought, and felt. Never drift into detached third-person narration or an outside observer's voice.
+
 ${NO_FABRICATION_RULE}
+
+${glossarySection()}
 
 OUTPUT:
 - Return clean Markdown prose only. No preamble, no meta-commentary, no headings unless natural.
@@ -109,15 +131,16 @@ export function chapterGeneratePrompt(params: {
   transcripts: string[];
   voice: VoiceStyleProfile | null;
   guidance?: string;
+  nameReplacements?: Record<string, string> | null;
 }): string {
-  const { promptText, transcripts, voice, guidance } = params;
+  const { promptText, transcripts, voice, guidance, nameReplacements } = params;
   const joined = transcripts
     .map((t, i) => `--- Recording ${i + 1} transcript ---\n${t}`)
     .join("\n\n");
   return `${renderVoiceGuide(voice)}
-
+${nameReplacementRule(nameReplacements)}
 ${promptText ? `The speaker was answering this prompt: "${promptText}"\n` : ""}
-Rewrite the following spoken transcript(s) into a first-person memoir chapter in the speaker's voice. Remember: ${NO_FABRICATION_RULE}
+Rewrite the following spoken transcript(s) into a first-person journal-style memoir chapter in the speaker's voice. Remember: ${NO_FABRICATION_RULE}
 ${guidance ? `\nEXTRA DIRECTION FROM THE AUTHOR: ${guidance}\n` : ""}
 ${joined}`;
 }
@@ -126,13 +149,14 @@ export function chapterAppendPrompt(params: {
   existingChapter: string;
   newTranscripts: string[];
   voice: VoiceStyleProfile | null;
+  nameReplacements?: Record<string, string> | null;
 }): string {
-  const { existingChapter, newTranscripts, voice } = params;
+  const { existingChapter, newTranscripts, voice, nameReplacements } = params;
   const joined = newTranscripts
     .map((t, i) => `--- New recording ${i + 1} transcript ---\n${t}`)
     .join("\n\n");
   return `${renderVoiceGuide(voice)}
-
+${nameReplacementRule(nameReplacements)}
 You are updating an existing chapter with additional material the speaker recorded later. Integrate the new material into the chapter.
 - You MAY add information that appears in the new transcript(s).
 - You MAY correct or update statements the speaker revises in the new material.

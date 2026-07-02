@@ -72,6 +72,7 @@ export async function POST(req: NextRequest) {
       transcripts,
       voice,
       guidance,
+      nameReplacements: (story.name_replacements as Record<string, string>) ?? null,
     });
 
     const { transcriptIds } = await gatherTranscriptIds(supabase, storyId);

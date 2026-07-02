@@ -1,6 +1,6 @@
 import { Suspense } from "react";
 import Link from "next/link";
-import { LoginForm } from "./login-form";
+import { LoginTabs } from "./login-tabs";
 
 export default function LoginPage() {
   return (
@@ -12,10 +12,11 @@ export default function LoginPage() {
         Sign in to your book
       </h1>
       <p className="mt-2 text-sm text-ink-soft">
-        We&apos;ll email you a magic link — no password to remember.
+        Get a one-time code by text, or a magic link by email — no password to
+        remember.
       </p>
       <Suspense>
-        <LoginForm />
+        <LoginTabs />
       </Suspense>
     </main>
   );

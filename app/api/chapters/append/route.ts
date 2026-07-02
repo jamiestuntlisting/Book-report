@@ -70,11 +70,19 @@ export async function POST(req: NextRequest) {
     let voice = await ensureVoiceProfile(supabase, user.id);
     if (!voice) voice = await getActiveVoiceProfile(supabase, user.id);
 
+    const { data: storyRow } = await supabase
+      .from("stories")
+      .select("name_replacements")
+      .eq("id", storyId)
+      .maybeSingle();
+
     const base = chapter.edited_text || chapter.generated_text || "";
     const merged = await appendToChapter({
       existingChapter: base,
       newTranscripts: texts,
       voice,
+      nameReplacements:
+        (storyRow?.name_replacements as Record<string, string>) ?? null,
     });
 
     const priorMeta = (chapter.generation_meta as ChapterGenerationMeta | null) ?? {};

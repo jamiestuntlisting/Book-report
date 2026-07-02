@@ -10,6 +10,7 @@ const PUBLIC_PREFIXES = [
   "/auth",
   "/share",
   "/api/webhooks",
+  "/api/cron",
   "/book/print",
 ];
 

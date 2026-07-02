@@ -29,6 +29,17 @@ and scannable QR links, and compiled into a print-ready book you can sell.
 - **Share** a public, read-only book via link.
 - **Interviews** — request a time to be interviewed; a Zoom webhook ingests the
   recording and feeds it into the same pipeline.
+- **Story check** — an editor's review of any chapter: missing story points
+  (which movie? who was there?), unclear passages, mis-transcribed stunt jargon
+  ("jerk vest", "stunt rigging"), tone warnings for unintentionally negative
+  passages, and journal-voice (first-person) drift — each with one-click fixes.
+- **Name verification & redaction** — people named in a story are checked
+  against TMDB (with IMDb links) for spelling/identity; correct the spelling,
+  change a name, or redact to initials. Changes persist through regenerations.
+- **Text-message login** — get a one-time code by SMS (Supabase phone auth via
+  Twilio), alongside email magic links.
+- **Weekly reminders** — opted-in storytellers get a weekly text (or email)
+  with a story prompt and a one-tap sign-in link.
 
 ## Tech stack
 
@@ -60,6 +71,9 @@ cp .env.example .env.local
 | `OPENAI_API_KEY` | Whisper transcription |
 | `NEXT_PUBLIC_APP_URL` | Base URL (magic-link + share links) |
 | `PDF_RENDER_TOKEN` | Shared secret gating the private print page |
+| `TMDB_API_KEY` | Name verification in story review (free key at themoviedb.org) |
+| `TWILIO_ACCOUNT_SID` / `TWILIO_AUTH_TOKEN` / `TWILIO_FROM_NUMBER` | Weekly reminder texts |
+| `CRON_SECRET` | Guards `/api/cron/reminders` (Vercel Cron sends it automatically) |
 | `ZOOM_*`, `CALCOM_API_KEY`, `CALENDLY_TOKEN` | Optional interview integrations |
 
 ### 3. Set up the database
@@ -75,6 +89,12 @@ supabase db push
 
 Enable the **Email** auth provider in Supabase (magic link) and add
 `${NEXT_PUBLIC_APP_URL}/auth/callback` to the allowed redirect URLs.
+
+**For text-message login** (optional): in the Supabase dashboard go to
+*Authentication → Providers → Phone*, enable it, and plug in your Twilio
+Account SID, Auth Token, and Message Service/From number. The login page's
+"Text me" tab works immediately after; until then it shows a friendly
+"not set up yet" message and email login keeps working.
 
 ### 4. Run
 
@@ -92,8 +112,10 @@ Open http://localhost:3000.
 4. **Generate chapter** → Claude writes it in your voice.
 5. Edit / regenerate / merge in another memo.
 6. Add photos and QR links.
-7. Reorder stories on the dashboard and number them as chapters.
-8. On **Book**: set the title/front matter, **Export PDF**, or **Share** a link.
+7. Run **Story check** — answer its questions with a new memo, apply jargon and
+   tone fixes, verify or redact names.
+8. Reorder stories on the dashboard and number them as chapters.
+9. On **Book**: set the title/front matter, **Export PDF**, or **Share** a link.
 
 ## Architecture notes
 

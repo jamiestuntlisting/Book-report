@@ -6,7 +6,16 @@ import { StoryHeader } from "@/components/story/story-header";
 import { RecordingsList } from "@/components/story/recordings-list";
 import { ChapterPanel } from "@/components/story/chapter-panel";
 import { Recorder } from "@/components/recorder/recorder";
-import type { Chapter, ChapterLink, Photo, Recording, Story, Transcript } from "@/lib/types";
+import { ReviewPanel } from "@/components/story/review-panel";
+import type {
+  Chapter,
+  ChapterLink,
+  Photo,
+  Recording,
+  Story,
+  StoryReview,
+  Transcript,
+} from "@/lib/types";
 
 export const dynamic = "force-dynamic";
 
@@ -81,6 +90,14 @@ export default async function StoryPage({
 
   const doneTranscriptIds = transcripts.filter((t) => t.status === "done").map((t) => t.id);
 
+  const { data: reviewRaw } = await supabase
+    .from("story_reviews")
+    .select("*")
+    .eq("story_id", storyId)
+    .maybeSingle();
+  const review = (reviewRaw as StoryReview) ?? null;
+  const hasChapterText = Boolean(chapter?.edited_text || chapter?.generated_text);
+
   return (
     <div className="space-y-8">
       <div>
@@ -123,6 +140,13 @@ export default async function StoryPage({
           hasTranscripts={doneTranscriptIds.length > 0}
           transcriptCount={doneTranscriptIds.length}
         />
+      </section>
+
+      <section>
+        <h2 className="mb-3 text-sm font-semibold uppercase tracking-widest text-ink-soft">
+          Story check
+        </h2>
+        <ReviewPanel storyId={storyId} review={review} hasChapter={hasChapterText} />
       </section>
     </div>
   );

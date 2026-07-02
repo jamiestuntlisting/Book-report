@@ -16,3 +16,20 @@ export async function saveProfile(formData: FormData) {
     .eq("id", user.id);
   revalidatePath("/settings");
 }
+
+export async function saveReminderPrefs(formData: FormData) {
+  const user = await getUser();
+  if (!user) return;
+  const supabase = await createClient();
+
+  const channel = formData.get("reminder_channel") === "email" ? "email" : "sms";
+  await supabase
+    .from("profiles")
+    .update({
+      phone: (formData.get("phone") as string)?.trim() || null,
+      reminder_opt_in: formData.get("reminder_opt_in") === "on",
+      reminder_channel: channel,
+    })
+    .eq("id", user.id);
+  revalidatePath("/settings");
+}
