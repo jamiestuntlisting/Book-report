@@ -1,0 +1,46 @@
+/* Print-ready book styling. `preferCSSPageSize` in Puppeteer picks up @page. */
+@page {
+  size: 6in 9in;
+  margin: 0.75in 0.6in;
+}
+
+html,
+body {
+  background: #ffffff;
+  color: #0f0f0f;
+}
+
+.book-print {
+  font-family: Georgia, Cambria, "Times New Roman", serif;
+}
+
+/* Each major section starts on a new page. */
+.book-page {
+  page-break-before: always;
+  break-before: page;
+}
+
+.title-page {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  min-height: 7in;
+  text-align: center;
+}
+
+.chapter {
+  padding-top: 0.3in;
+}
+
+/* Avoid orphan/widow headings and split figures. */
+h1,
+h2,
+h3 {
+  break-after: avoid;
+}
+figure,
+img {
+  break-inside: avoid;
+  max-width: 100%;
+}

@@ -1,0 +1,49 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --background: #f6f1e7;
+  --foreground: #0f0f0f;
+}
+
+html {
+  color-scheme: light;
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-sans, ui-sans-serif, system-ui, sans-serif);
+}
+
+/* Rendered chapter / book prose */
+.prose-book {
+  font-family: Georgia, Cambria, "Times New Roman", serif;
+  line-height: 1.7;
+  font-size: 1.05rem;
+}
+.prose-book p {
+  margin: 0 0 1rem;
+  text-indent: 1.4em;
+}
+.prose-book p:first-of-type {
+  text-indent: 0;
+}
+.prose-book h1,
+.prose-book h2,
+.prose-book h3 {
+  font-weight: 600;
+  margin: 1.5rem 0 0.75rem;
+  text-indent: 0;
+}
+.prose-book em {
+  font-style: italic;
+}
+.prose-book strong {
+  font-weight: 700;
+}
+.prose-book ul,
+.prose-book ol {
+  margin: 0 0 1rem 1.5rem;
+}
