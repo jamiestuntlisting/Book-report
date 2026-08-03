@@ -4,7 +4,7 @@ import { useState, useTransition } from "react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { ImagePlus, X } from "lucide-react";
-import { createClient } from "@/lib/supabase/client";
+import { uploadMedia } from "@/lib/upload-client";
 import { Button, Input } from "@/components/ui";
 import { registerPhoto, deletePhoto } from "@/app/(app)/stories/[storyId]/actions";
 import type { Photo } from "@/lib/types";
@@ -40,12 +40,8 @@ export function PhotoManager({
         body: JSON.stringify({ purpose: "photo", chapterId: cid, mimeType: file.type }),
       });
       if (!signRes.ok) throw new Error((await signRes.json()).error ?? "sign failed");
-      const { bucket, path, token } = await signRes.json();
-      const supabase = createClient();
-      const { error: upErr } = await supabase.storage
-        .from(bucket)
-        .uploadToSignedUrl(path, token, file, { contentType: file.type });
-      if (upErr) throw new Error(upErr.message);
+      const { bucket, path, key } = await signRes.json();
+      await uploadMedia(key, file, file.type);
       await registerPhoto(cid, storyId, bucket, path, caption);
       setCaption("");
       router.refresh();

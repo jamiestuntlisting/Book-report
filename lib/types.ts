@@ -1,5 +1,5 @@
-// Domain types mirroring the Postgres schema (supabase/migrations/0001_init.sql).
-// Kept hand-written for clarity; regenerate with `supabase gen types` if desired.
+// Domain types mirroring the D1 schema (lib/db/schema.ts / db/schema.sql).
+// Kept hand-written for clarity.
 
 export type StoryStatus =
   | "draft"

@@ -1,31 +1,26 @@
-import { createClient, getUser } from "@/lib/supabase/server";
+import { eq } from "drizzle-orm";
+import { requireUser } from "@/lib/auth/session";
+import { getDb, tables } from "@/lib/db";
+import { getActiveVoiceProfile } from "@/lib/generation";
 import { saveProfile, saveReminderPrefs } from "./actions";
 import { Button, Input, Label, Textarea } from "@/components/ui";
 import { VoiceProfileCard } from "@/components/settings/voice-profile-card";
-import type { Profile, VoiceStyleProfile } from "@/lib/types";
+import type { Profile } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
 
 export default async function SettingsPage() {
-  const user = await getUser();
-  const supabase = await createClient();
+  const user = await requireUser();
+  const db = getDb();
 
-  const { data: profileRaw } = await supabase
-    .from("profiles")
-    .select("*")
-    .eq("id", user!.id)
-    .maybeSingle();
-  const profile = (profileRaw as Profile) ?? null;
+  const [profileRaw] = await db
+    .select()
+    .from(tables.profiles)
+    .where(eq(tables.profiles.id, user.id))
+    .limit(1);
+  const profile = (profileRaw as Profile | undefined) ?? null;
 
-  const { data: voiceRaw } = await supabase
-    .from("voice_style_profiles")
-    .select("*")
-    .eq("user_id", user!.id)
-    .eq("is_active", true)
-    .order("version", { ascending: false })
-    .limit(1)
-    .maybeSingle();
-  const voice = (voiceRaw as VoiceStyleProfile) ?? null;
+  const voice = await getActiveVoiceProfile(db, user.id);
 
   return (
     <div className="max-w-2xl space-y-8">
@@ -42,7 +37,9 @@ export default async function SettingsPage() {
             <Label htmlFor="bio">Bio</Label>
             <Textarea id="bio" name="bio" rows={3} defaultValue={profile?.bio ?? ""} />
           </div>
-          <p className="text-sm text-ink-soft">Signed in as {user!.email}</p>
+          <p className="text-sm text-ink-soft">
+            Signed in as {user.email ?? user.phone}
+          </p>
           <Button type="submit">Save profile</Button>
         </div>
       </form>

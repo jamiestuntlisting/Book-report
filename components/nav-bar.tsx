@@ -2,7 +2,6 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { createClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
 
 const LINKS = [
@@ -17,8 +16,7 @@ export function NavBar({ email }: { email: string }) {
   const router = useRouter();
 
   async function signOut() {
-    const supabase = createClient();
-    await supabase.auth.signOut();
+    await fetch("/api/auth/logout", { method: "POST" });
     router.push("/login");
     router.refresh();
   }

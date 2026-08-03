@@ -1,7 +1,9 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { createClient, getUser } from "@/lib/supabase/server";
-import { signedReadUrl } from "@/lib/storage";
+import { and, asc, eq, inArray } from "drizzle-orm";
+import { requireUser } from "@/lib/auth/session";
+import { getDb, tables } from "@/lib/db";
+import { signedReadUrl } from "@/lib/media";
 import { StoryHeader } from "@/components/story/story-header";
 import { RecordingsList } from "@/components/story/recordings-list";
 import { ChapterPanel } from "@/components/story/chapter-panel";
@@ -25,77 +27,78 @@ export default async function StoryPage({
   params: Promise<{ storyId: string }>;
 }) {
   const { storyId } = await params;
-  const user = await getUser();
-  const supabase = await createClient();
+  const user = await requireUser();
+  const db = getDb();
 
-  const { data: story } = await supabase
-    .from("stories")
-    .select("*")
-    .eq("id", storyId)
-    .eq("user_id", user!.id)
-    .maybeSingle();
-  if (!story) notFound();
-  const s = story as Story;
+  const [storyRow] = await db
+    .select()
+    .from(tables.stories)
+    .where(and(eq(tables.stories.id, storyId), eq(tables.stories.user_id, user.id)))
+    .limit(1);
+  if (!storyRow) notFound();
+  const s = storyRow as Story;
 
-  const { data: recordingsRaw } = await supabase
-    .from("recordings")
-    .select("*")
-    .eq("story_id", storyId)
-    .order("sort_order", { ascending: true });
-  const recordings = (recordingsRaw ?? []) as Recording[];
+  const recordings = (await db
+    .select()
+    .from(tables.recordings)
+    .where(eq(tables.recordings.story_id, storyId))
+    .orderBy(asc(tables.recordings.sort_order))) as Recording[];
 
   // Sign playback URLs + gather transcripts.
   const recordingIds = recordings.map((r) => r.id);
-  const { data: transcriptsRaw } = recordingIds.length
-    ? await supabase.from("transcripts").select("*").in("recording_id", recordingIds)
-    : { data: [] };
-  const transcripts = (transcriptsRaw ?? []) as Transcript[];
+  const transcripts = recordingIds.length
+    ? ((await db
+        .select()
+        .from(tables.transcripts)
+        .where(inArray(tables.transcripts.recording_id, recordingIds))) as Transcript[])
+    : [];
 
   const playback = await Promise.all(
     recordings.map(async (r) => ({
       recording: r,
-      url: await signedReadUrl(supabase, r.storage_bucket, r.storage_path),
+      url: await signedReadUrl(r.storage_bucket, r.storage_path),
       transcript: transcripts.find((t) => t.recording_id === r.id) ?? null,
     })),
   );
 
-  const { data: chapterRaw } = await supabase
-    .from("chapters")
-    .select("*")
-    .eq("story_id", storyId)
-    .maybeSingle();
-  const chapter = (chapterRaw as Chapter) ?? null;
+  const [chapterRow] = await db
+    .select()
+    .from(tables.chapters)
+    .where(eq(tables.chapters.story_id, storyId))
+    .limit(1);
+  const chapter = (chapterRow as Chapter | undefined) ?? null;
 
   let photos: Array<Photo & { url: string | null }> = [];
   let links: ChapterLink[] = [];
   if (chapter) {
-    const { data: photoRows } = await supabase
-      .from("photos")
-      .select("*")
-      .eq("chapter_id", chapter.id)
-      .order("position", { ascending: true });
+    const photoRows = (await db
+      .select()
+      .from(tables.photos)
+      .where(eq(tables.photos.chapter_id, chapter.id))
+      .orderBy(asc(tables.photos.position))) as Photo[];
     photos = await Promise.all(
-      ((photoRows ?? []) as Photo[]).map(async (p) => ({
+      photoRows.map(async (p) => ({
         ...p,
-        url: await signedReadUrl(supabase, p.storage_bucket, p.storage_path),
+        url: await signedReadUrl(p.storage_bucket, p.storage_path),
       })),
     );
-    const { data: linkRows } = await supabase
-      .from("chapter_links")
-      .select("*")
-      .eq("chapter_id", chapter.id)
-      .order("position", { ascending: true });
-    links = (linkRows ?? []) as ChapterLink[];
+    links = (await db
+      .select()
+      .from(tables.chapter_links)
+      .where(eq(tables.chapter_links.chapter_id, chapter.id))
+      .orderBy(asc(tables.chapter_links.position))) as ChapterLink[];
   }
 
-  const doneTranscriptIds = transcripts.filter((t) => t.status === "done").map((t) => t.id);
+  const doneTranscriptIds = transcripts
+    .filter((t) => t.status === "done")
+    .map((t) => t.id);
 
-  const { data: reviewRaw } = await supabase
-    .from("story_reviews")
-    .select("*")
-    .eq("story_id", storyId)
-    .maybeSingle();
-  const review = (reviewRaw as StoryReview) ?? null;
+  const [reviewRow] = await db
+    .select()
+    .from(tables.story_reviews)
+    .where(eq(tables.story_reviews.story_id, storyId))
+    .limit(1);
+  const review = (reviewRow as StoryReview | undefined) ?? null;
   const hasChapterText = Boolean(chapter?.edited_text || chapter?.generated_text);
 
   return (

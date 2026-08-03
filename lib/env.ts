@@ -1,10 +1,9 @@
 // Centralized env access with helpful errors. Public vars are inlined by Next
 // at build time; server-only vars are read lazily so the client bundle never
-// references them.
+// references them. On Cloudflare, the OpenNext adapter copies Worker vars and
+// secrets into process.env.
 
 export const publicEnv = {
-  supabaseUrl: process.env.NEXT_PUBLIC_SUPABASE_URL ?? "",
-  supabaseAnonKey: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? "",
   appUrl: process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000",
 };
 
@@ -12,7 +11,7 @@ function required(name: string): string {
   const value = process.env[name];
   if (!value) {
     throw new Error(
-      `Missing required environment variable: ${name}. See .env.example.`,
+      `Missing required environment variable: ${name}. See .dev.vars.example.`,
     );
   }
   return value;
@@ -20,8 +19,8 @@ function required(name: string): string {
 
 /** Server-only env. Calling these on the client will throw. */
 export const serverEnv = {
-  get supabaseServiceRoleKey() {
-    return required("SUPABASE_SERVICE_ROLE_KEY");
+  get authSecret() {
+    return required("AUTH_SECRET");
   },
   get anthropicApiKey() {
     return required("ANTHROPIC_API_KEY");
@@ -32,6 +31,9 @@ export const serverEnv = {
   get pdfRenderToken() {
     return required("PDF_RENDER_TOKEN");
   },
+  get resendApiKey() {
+    return required("RESEND_API_KEY");
+  },
   zoom: {
     accountId: process.env.ZOOM_ACCOUNT_ID ?? "",
     clientId: process.env.ZOOM_CLIENT_ID ?? "",
@@ -40,6 +42,7 @@ export const serverEnv = {
   },
 };
 
-export function isSupabaseConfigured(): boolean {
-  return Boolean(publicEnv.supabaseUrl && publicEnv.supabaseAnonKey);
+/** True once the core login/runtime secrets are present. */
+export function isAppConfigured(): boolean {
+  return Boolean(process.env.AUTH_SECRET);
 }

@@ -1,7 +1,10 @@
 import Link from "next/link";
-import { getUser } from "@/lib/supabase/server";
-import { isSupabaseConfigured } from "@/lib/env";
+import { getUser } from "@/lib/auth/session";
+import { isAppConfigured } from "@/lib/env";
 import { Button } from "@/components/ui";
+
+// Reads the session cookie, so it must always render per-request.
+export const dynamic = "force-dynamic";
 
 const QUESTIONS = [
   "How did you get into stunts?",
@@ -11,7 +14,7 @@ const QUESTIONS = [
 ];
 
 export default async function HomePage() {
-  const configured = isSupabaseConfigured();
+  const configured = isAppConfigured();
   const user = configured ? await getUser() : null;
 
   return (
@@ -44,10 +47,10 @@ export default async function HomePage() {
 
       {!configured && (
         <div className="mt-8 rounded-lg border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900">
-          <strong>Setup needed:</strong> Supabase isn&apos;t configured yet. Copy{" "}
-          <code>.env.example</code> to <code>.env.local</code>, fill in your
-          keys, and apply <code>supabase/migrations/0001_init.sql</code>. See the{" "}
-          <code>README.md</code>.
+          <strong>Setup needed:</strong> the app&apos;s secrets aren&apos;t
+          configured yet. Set <code>AUTH_SECRET</code> and friends (see{" "}
+          <code>.dev.vars.example</code> and the <code>README.md</code>), then
+          reload.
         </div>
       )}
 

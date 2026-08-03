@@ -1,16 +1,18 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { createServerClient } from "@supabase/ssr";
-import { publicEnv, isSupabaseConfigured } from "@/lib/env";
+import { parseSessionCookie, SESSION_COOKIE } from "@/lib/auth/cookie";
+import { isAppConfigured } from "@/lib/env";
 
-// Refreshes the Supabase auth session cookie on every request and guards the
-// authenticated app shell. Public routes (login, share links, auth callback,
-// webhooks, print) are allowed through unauthenticated.
+// Guards the authenticated app shell with a stateless cookie-signature check
+// (no DB hit). Pages and API routes still verify the session against D1 via
+// getUser()/requireUser(). Public routes are allowed through unauthenticated.
 const PUBLIC_PREFIXES = [
   "/login",
   "/auth",
   "/share",
+  "/api/auth",
   "/api/webhooks",
   "/api/cron",
+  "/api/media", // does its own auth (session, signed URL, or render token)
   "/book/print",
 ];
 
@@ -22,42 +24,23 @@ function isPublic(pathname: string): boolean {
 }
 
 export async function middleware(request: NextRequest) {
-  const response = NextResponse.next({ request });
-
-  // If Supabase isn't configured yet, don't block — let pages render setup help.
-  if (!isSupabaseConfigured()) return response;
-
-  const supabase = createServerClient(
-    publicEnv.supabaseUrl,
-    publicEnv.supabaseAnonKey,
-    {
-      cookies: {
-        getAll() {
-          return request.cookies.getAll();
-        },
-        setAll(cookiesToSet) {
-          cookiesToSet.forEach(({ name, value, options }) =>
-            response.cookies.set(name, value, options),
-          );
-        },
-      },
-    },
-  );
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  // If secrets aren't configured yet, don't block — let pages render setup help.
+  if (!isAppConfigured()) return NextResponse.next();
 
   const { pathname } = request.nextUrl;
+  if (isPublic(pathname)) return NextResponse.next();
 
-  if (!user && !isPublic(pathname)) {
+  const sessionId = await parseSessionCookie(
+    request.cookies.get(SESSION_COOKIE)?.value,
+  );
+  if (!sessionId) {
     const url = request.nextUrl.clone();
     url.pathname = "/login";
     url.searchParams.set("next", pathname);
     return NextResponse.redirect(url);
   }
 
-  return response;
+  return NextResponse.next();
 }
 
 export const config = {

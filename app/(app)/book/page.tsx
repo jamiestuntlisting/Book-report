@@ -1,4 +1,6 @@
-import { createClient, getUser } from "@/lib/supabase/server";
+import { eq } from "drizzle-orm";
+import { requireUser } from "@/lib/auth/session";
+import { getDb, tables } from "@/lib/db";
 import { assembleBook } from "@/lib/book";
 import { saveBookSettings } from "./actions";
 import { Button, Input, Label, Textarea } from "@/components/ui";
@@ -9,17 +11,17 @@ import type { BookSettings } from "@/lib/types";
 export const dynamic = "force-dynamic";
 
 export default async function BookPage() {
-  const user = await getUser();
-  const supabase = await createClient();
+  const user = await requireUser();
+  const db = getDb();
 
-  const { data: settingsRaw } = await supabase
-    .from("book_settings")
-    .select("*")
-    .eq("user_id", user!.id)
-    .maybeSingle();
-  const settings = (settingsRaw as BookSettings) ?? null;
+  const [settingsRaw] = await db
+    .select()
+    .from(tables.book_settings)
+    .where(eq(tables.book_settings.user_id, user.id))
+    .limit(1);
+  const settings = (settingsRaw as BookSettings | undefined) ?? null;
 
-  const book = await assembleBook(supabase, user!.id);
+  const book = await assembleBook(db, user.id);
 
   return (
     <div className="space-y-8">

@@ -2,12 +2,10 @@
 
 import { useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { createClient } from "@/lib/supabase/client";
 import { Button, Input, Label } from "@/components/ui";
 
-// Phone sign-in via Supabase phone auth: a one-time code is texted through the
-// Twilio credentials configured in the Supabase dashboard. Requires the Phone
-// provider to be enabled (see README).
+// Phone sign-in: the app texts a one-time code via Twilio (requires the
+// TWILIO_* secrets; the form explains itself when they're missing).
 export function PhoneForm() {
   const router = useRouter();
   const params = useSearchParams();
@@ -30,19 +28,19 @@ export function PhoneForm() {
     e.preventDefault();
     setBusy(true);
     setMessage("");
-    const supabase = createClient();
-    const { error } = await supabase.auth.signInWithOtp({
-      phone: normalizePhone(phone),
+    const res = await fetch("/api/auth/sms", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ phone: normalizePhone(phone) }),
     });
     setBusy(false);
-    if (error) {
-      setMessage(
-        error.message.includes("not enabled") || error.message.includes("provider")
-          ? "Text sign-in isn't set up yet — use email for now."
-          : error.message,
-      );
-    } else {
+    if (res.ok) {
       setStage("enter-code");
+    } else {
+      const body = (await res.json().catch(() => null)) as {
+        error?: string;
+      } | null;
+      setMessage(body?.error ?? "Couldn't send the code — try again.");
     }
   }
 
@@ -50,18 +48,20 @@ export function PhoneForm() {
     e.preventDefault();
     setBusy(true);
     setMessage("");
-    const supabase = createClient();
-    const { error } = await supabase.auth.verifyOtp({
-      phone: normalizePhone(phone),
-      token: code.trim(),
-      type: "sms",
+    const res = await fetch("/api/auth/sms/verify", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ phone: normalizePhone(phone), code: code.trim() }),
     });
     setBusy(false);
-    if (error) {
-      setMessage(error.message);
-    } else {
+    if (res.ok) {
       router.push(next);
       router.refresh();
+    } else {
+      const body = (await res.json().catch(() => null)) as {
+        error?: string;
+      } | null;
+      setMessage(body?.error ?? "That code didn't match.");
     }
   }
 

@@ -1,13 +1,13 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { createClient, getUser } from "@/lib/supabase/server";
+import { and, eq } from "drizzle-orm";
+import { requireUser } from "@/lib/auth/session";
+import { getDb, tables } from "@/lib/db";
 import { createInterviewMeeting } from "@/lib/interview";
 
 export async function requestInterview(formData: FormData) {
-  const user = await getUser();
-  if (!user) return;
-  const supabase = await createClient();
+  const user = await requireUser();
 
   const scheduledAt = (formData.get("scheduled_at") as string) || null;
   const notes = (formData.get("notes") as string) || null;
@@ -30,7 +30,7 @@ export async function requestInterview(formData: FormData) {
     status = "scheduled";
   }
 
-  await supabase.from("interview_appointments").insert({
+  await getDb().insert(tables.interview_appointments).values({
     user_id: user.id,
     scheduled_at: scheduledAt,
     timezone,
@@ -45,10 +45,15 @@ export async function requestInterview(formData: FormData) {
 }
 
 export async function cancelInterview(id: string) {
-  const supabase = await createClient();
-  await supabase
-    .from("interview_appointments")
-    .update({ status: "canceled" })
-    .eq("id", id);
+  const user = await requireUser();
+  await getDb()
+    .update(tables.interview_appointments)
+    .set({ status: "canceled" })
+    .where(
+      and(
+        eq(tables.interview_appointments.id, id),
+        eq(tables.interview_appointments.user_id, user.id),
+      ),
+    );
   revalidatePath("/interviews");
 }

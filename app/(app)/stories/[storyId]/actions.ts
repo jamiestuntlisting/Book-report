@@ -1,19 +1,23 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { createClient, getUser } from "@/lib/supabase/server";
+import { and, desc, eq } from "drizzle-orm";
+import { requireUser } from "@/lib/auth/session";
+import { getDb, tables } from "@/lib/db";
 import type { FindingStatus, ReviewFindings } from "@/lib/types";
+
+const nowIso = () => new Date().toISOString();
 
 export async function saveChapterEdit(
   chapterId: string,
   storyId: string,
   editedText: string,
 ) {
-  const supabase = await createClient();
-  await supabase
-    .from("chapters")
-    .update({ edited_text: editedText, status: "edited" })
-    .eq("id", chapterId);
+  const user = await requireUser();
+  await getDb()
+    .update(tables.chapters)
+    .set({ edited_text: editedText, status: "edited", updated_at: nowIso() })
+    .where(and(eq(tables.chapters.id, chapterId), eq(tables.chapters.user_id, user.id)));
   revalidatePath(`/stories/${storyId}`);
 }
 
@@ -22,8 +26,11 @@ export async function updateChapterTitle(
   storyId: string,
   title: string,
 ) {
-  const supabase = await createClient();
-  await supabase.from("chapters").update({ title }).eq("id", chapterId);
+  const user = await requireUser();
+  await getDb()
+    .update(tables.chapters)
+    .set({ title, updated_at: nowIso() })
+    .where(and(eq(tables.chapters.id, chapterId), eq(tables.chapters.user_id, user.id)));
   revalidatePath(`/stories/${storyId}`);
   revalidatePath("/book");
 }
@@ -34,17 +41,15 @@ export async function addChapterLink(
   url: string,
   label: string,
 ) {
-  const user = await getUser();
-  if (!user) return;
-  const supabase = await createClient();
-  const { data: last } = await supabase
-    .from("chapter_links")
-    .select("position")
-    .eq("chapter_id", chapterId)
-    .order("position", { ascending: false })
-    .limit(1)
-    .maybeSingle();
-  await supabase.from("chapter_links").insert({
+  const user = await requireUser();
+  const db = getDb();
+  const [last] = await db
+    .select({ position: tables.chapter_links.position })
+    .from(tables.chapter_links)
+    .where(eq(tables.chapter_links.chapter_id, chapterId))
+    .orderBy(desc(tables.chapter_links.position))
+    .limit(1);
+  await db.insert(tables.chapter_links).values({
     user_id: user.id,
     chapter_id: chapterId,
     url,
@@ -55,8 +60,15 @@ export async function addChapterLink(
 }
 
 export async function deleteChapterLink(linkId: string, storyId: string) {
-  const supabase = await createClient();
-  await supabase.from("chapter_links").delete().eq("id", linkId);
+  const user = await requireUser();
+  await getDb()
+    .delete(tables.chapter_links)
+    .where(
+      and(
+        eq(tables.chapter_links.id, linkId),
+        eq(tables.chapter_links.user_id, user.id),
+      ),
+    );
   revalidatePath(`/stories/${storyId}`);
 }
 
@@ -67,17 +79,15 @@ export async function registerPhoto(
   path: string,
   caption: string,
 ) {
-  const user = await getUser();
-  if (!user) return;
-  const supabase = await createClient();
-  const { data: last } = await supabase
-    .from("photos")
-    .select("position")
-    .eq("chapter_id", chapterId)
-    .order("position", { ascending: false })
-    .limit(1)
-    .maybeSingle();
-  await supabase.from("photos").insert({
+  const user = await requireUser();
+  const db = getDb();
+  const [last] = await db
+    .select({ position: tables.photos.position })
+    .from(tables.photos)
+    .where(eq(tables.photos.chapter_id, chapterId))
+    .orderBy(desc(tables.photos.position))
+    .limit(1);
+  await db.insert(tables.photos).values({
     user_id: user.id,
     chapter_id: chapterId,
     storage_bucket: bucket,
@@ -89,26 +99,34 @@ export async function registerPhoto(
 }
 
 export async function deletePhoto(photoId: string, storyId: string) {
-  const supabase = await createClient();
-  await supabase.from("photos").delete().eq("id", photoId);
+  const user = await requireUser();
+  await getDb()
+    .delete(tables.photos)
+    .where(and(eq(tables.photos.id, photoId), eq(tables.photos.user_id, user.id)));
   revalidatePath(`/stories/${storyId}`);
 }
 
 // ---- Story review actions ----
 
-/** Marks a review finding open/applied/dismissed inside the findings jsonb. */
+/** Marks a review finding open/applied/dismissed inside the findings JSON. */
 export async function setFindingStatus(
   storyId: string,
   category: keyof ReviewFindings,
   findingId: string,
   status: FindingStatus,
 ) {
-  const supabase = await createClient();
-  const { data: review } = await supabase
-    .from("story_reviews")
-    .select("id, findings")
-    .eq("story_id", storyId)
-    .maybeSingle();
+  const user = await requireUser();
+  const db = getDb();
+  const [review] = await db
+    .select({ id: tables.story_reviews.id, findings: tables.story_reviews.findings })
+    .from(tables.story_reviews)
+    .where(
+      and(
+        eq(tables.story_reviews.story_id, storyId),
+        eq(tables.story_reviews.user_id, user.id),
+      ),
+    )
+    .limit(1);
   if (!review) return;
 
   const findings = review.findings as ReviewFindings;
@@ -117,10 +135,10 @@ export async function setFindingStatus(
   if (!finding) return;
   finding.status = status;
 
-  await supabase
-    .from("story_reviews")
-    .update({ findings })
-    .eq("id", review.id);
+  await db
+    .update(tables.story_reviews)
+    .set({ findings })
+    .where(eq(tables.story_reviews.id, review.id));
   revalidatePath(`/stories/${storyId}`);
 }
 
@@ -137,12 +155,22 @@ export async function applyTextFix(
   find: string,
   replace: string,
 ): Promise<{ error?: string }> {
-  const supabase = await createClient();
-  const { data: chapter } = await supabase
-    .from("chapters")
-    .select("id, generated_text, edited_text")
-    .eq("story_id", storyId)
-    .maybeSingle();
+  const user = await requireUser();
+  const db = getDb();
+  const [chapter] = await db
+    .select({
+      id: tables.chapters.id,
+      generated_text: tables.chapters.generated_text,
+      edited_text: tables.chapters.edited_text,
+    })
+    .from(tables.chapters)
+    .where(
+      and(
+        eq(tables.chapters.story_id, storyId),
+        eq(tables.chapters.user_id, user.id),
+      ),
+    )
+    .limit(1);
   if (!chapter) return { error: "No chapter to fix." };
 
   const base = chapter.edited_text || chapter.generated_text || "";
@@ -150,10 +178,14 @@ export async function applyTextFix(
     return { error: "That text no longer appears in the chapter — re-run the review." };
   }
 
-  await supabase
-    .from("chapters")
-    .update({ edited_text: base.replaceAll(find, replace), status: "edited" })
-    .eq("id", chapter.id);
+  await db
+    .update(tables.chapters)
+    .set({
+      edited_text: base.replaceAll(find, replace),
+      status: "edited",
+      updated_at: nowIso(),
+    })
+    .where(eq(tables.chapters.id, chapter.id));
 
   await setFindingStatus(storyId, category, findingId, "applied");
   revalidatePath(`/stories/${storyId}`);
@@ -171,22 +203,26 @@ export async function applyNameReplacement(
   originalName: string,
   newName: string,
 ): Promise<{ error?: string }> {
-  const supabase = await createClient();
-  const { data: story } = await supabase
-    .from("stories")
-    .select("id, name_replacements")
-    .eq("id", storyId)
-    .maybeSingle();
+  const user = await requireUser();
+  const db = getDb();
+  const [story] = await db
+    .select({
+      id: tables.stories.id,
+      name_replacements: tables.stories.name_replacements,
+    })
+    .from(tables.stories)
+    .where(and(eq(tables.stories.id, storyId), eq(tables.stories.user_id, user.id)))
+    .limit(1);
   if (!story) return { error: "Story not found." };
 
   const replacements = {
-    ...((story.name_replacements as Record<string, string>) ?? {}),
+    ...(story.name_replacements ?? {}),
     [originalName]: newName,
   };
-  await supabase
-    .from("stories")
-    .update({ name_replacements: replacements })
-    .eq("id", storyId);
+  await db
+    .update(tables.stories)
+    .set({ name_replacements: replacements, updated_at: nowIso() })
+    .where(eq(tables.stories.id, storyId));
 
   const result = await applyTextFix(storyId, "names", findingId, originalName, newName);
   // Even if the exact string is gone from the text, the persistent mapping is
@@ -202,30 +238,34 @@ export async function applyNameReplacement(
 // Ensures a chapter row exists for a story (used before attaching media if the
 // user hasn't generated text yet).
 export async function ensureChapter(storyId: string): Promise<string | null> {
-  const user = await getUser();
-  if (!user) return null;
-  const supabase = await createClient();
-  const { data: existing } = await supabase
-    .from("chapters")
-    .select("id")
-    .eq("story_id", storyId)
-    .maybeSingle();
+  const user = await requireUser();
+  const db = getDb();
+  const [existing] = await db
+    .select({ id: tables.chapters.id })
+    .from(tables.chapters)
+    .where(
+      and(
+        eq(tables.chapters.story_id, storyId),
+        eq(tables.chapters.user_id, user.id),
+      ),
+    )
+    .limit(1);
   if (existing) return existing.id;
-  const { data: story } = await supabase
-    .from("stories")
-    .select("title")
-    .eq("id", storyId)
-    .maybeSingle();
-  const { data: created } = await supabase
-    .from("chapters")
-    .insert({
+
+  const [story] = await db
+    .select({ title: tables.stories.title })
+    .from(tables.stories)
+    .where(and(eq(tables.stories.id, storyId), eq(tables.stories.user_id, user.id)))
+    .limit(1);
+  const [created] = await db
+    .insert(tables.chapters)
+    .values({
       user_id: user.id,
       story_id: storyId,
       title: story?.title ?? "Untitled chapter",
       status: "empty",
     })
-    .select("id")
-    .single();
+    .returning({ id: tables.chapters.id });
   revalidatePath(`/stories/${storyId}`);
   return created?.id ?? null;
 }

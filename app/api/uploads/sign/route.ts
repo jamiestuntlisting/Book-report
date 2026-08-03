@@ -1,10 +1,10 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { z } from "zod";
-import { getUser, createClient } from "@/lib/supabase/server";
+import { and, eq } from "drizzle-orm";
+import { getUser } from "@/lib/auth/session";
+import { getDb, tables } from "@/lib/db";
 import { extFromMime } from "@/lib/utils";
-import { recordingPath, photoPath, BUCKETS } from "@/lib/storage";
-
-export const runtime = "nodejs";
+import { recordingPath, photoPath, BUCKETS, mediaKey } from "@/lib/media";
 
 const schema = z.object({
   purpose: z.enum(["recording", "photo"]),
@@ -14,9 +14,9 @@ const schema = z.object({
   mimeType: z.string(),
 });
 
-// Mints a short-lived signed upload URL scoped to a path the caller owns, after
-// verifying ownership of the parent story/chapter. Keeps large media uploads
-// off the server request path — the browser PUTs directly to Storage.
+// Allocates an upload destination scoped to a path the caller owns, after
+// verifying ownership of the parent story/chapter. The browser then PUTs the
+// bytes to /api/media/<key> (or the multipart endpoint for big files).
 export async function POST(req: NextRequest) {
   const user = await getUser();
   if (!user) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
@@ -26,7 +26,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "invalid body" }, { status: 400 });
   }
   const { purpose, storyId, chapterId, kind, mimeType } = parsed.data;
-  const supabase = await createClient();
+  const db = getDb();
   const ext = extFromMime(mimeType);
   const id = crypto.randomUUID();
 
@@ -37,12 +37,11 @@ export async function POST(req: NextRequest) {
     if (!storyId || !kind) {
       return NextResponse.json({ error: "storyId and kind required" }, { status: 400 });
     }
-    const { data: story } = await supabase
-      .from("stories")
-      .select("id")
-      .eq("id", storyId)
-      .eq("user_id", user.id)
-      .maybeSingle();
+    const [story] = await db
+      .select({ id: tables.stories.id })
+      .from(tables.stories)
+      .where(and(eq(tables.stories.id, storyId), eq(tables.stories.user_id, user.id)))
+      .limit(1);
     if (!story) return NextResponse.json({ error: "story not found" }, { status: 404 });
     bucket = kind === "video" ? BUCKETS.video : BUCKETS.audio;
     path = recordingPath(user.id, storyId, id, ext);
@@ -50,29 +49,22 @@ export async function POST(req: NextRequest) {
     if (!chapterId) {
       return NextResponse.json({ error: "chapterId required" }, { status: 400 });
     }
-    const { data: chapter } = await supabase
-      .from("chapters")
-      .select("id")
-      .eq("id", chapterId)
-      .eq("user_id", user.id)
-      .maybeSingle();
+    const [chapter] = await db
+      .select({ id: tables.chapters.id })
+      .from(tables.chapters)
+      .where(
+        and(eq(tables.chapters.id, chapterId), eq(tables.chapters.user_id, user.id)),
+      )
+      .limit(1);
     if (!chapter) return NextResponse.json({ error: "chapter not found" }, { status: 404 });
     bucket = BUCKETS.photos;
     path = photoPath(user.id, chapterId, id, ext);
-  }
-
-  const { data, error } = await supabase.storage
-    .from(bucket)
-    .createSignedUploadUrl(path);
-  if (error || !data) {
-    return NextResponse.json({ error: error?.message ?? "sign failed" }, { status: 500 });
   }
 
   return NextResponse.json({
     id,
     bucket,
     path,
-    token: data.token,
-    signedUrl: data.signedUrl,
+    key: mediaKey(bucket, path),
   });
 }

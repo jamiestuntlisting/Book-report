@@ -1,6 +1,5 @@
 // Minimal Twilio SMS sender (REST API via fetch — no SDK needed).
-// Used for weekly reminder texts. Login-code texts are sent by Supabase itself
-// through the Twilio credentials configured in the Supabase dashboard.
+// Used for login-code texts and weekly reminder texts.
 
 export function isTwilioConfigured(): boolean {
   return Boolean(

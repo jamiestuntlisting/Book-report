@@ -1,5 +1,6 @@
 import Link from "next/link";
-import { createClient } from "@/lib/supabase/server";
+import { asc, eq } from "drizzle-orm";
+import { getDb, tables } from "@/lib/db";
 import { createStory } from "@/app/(app)/stories/actions";
 import { Button, Input, Label } from "@/components/ui";
 import type { TemplateQuestion } from "@/lib/types";
@@ -7,14 +8,13 @@ import type { TemplateQuestion } from "@/lib/types";
 export const dynamic = "force-dynamic";
 
 export default async function NewStoryPage() {
-  const supabase = await createClient();
-  const { data: questions } = await supabase
-    .from("template_questions")
-    .select("*")
-    .eq("active", true)
-    .order("sort_order", { ascending: true });
+  const questions = await getDb()
+    .select()
+    .from(tables.template_questions)
+    .where(eq(tables.template_questions.active, true))
+    .orderBy(asc(tables.template_questions.sort_order));
 
-  const list = (questions ?? []) as TemplateQuestion[];
+  const list = questions as TemplateQuestion[];
 
   return (
     <div className="mx-auto max-w-2xl">

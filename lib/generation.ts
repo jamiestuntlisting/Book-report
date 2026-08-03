@@ -1,4 +1,6 @@
-import type { SupabaseClient } from "@supabase/supabase-js";
+import { and, asc, desc, eq, inArray } from "drizzle-orm";
+import type { Db } from "@/lib/db";
+import { tables } from "@/lib/db";
 import type { VoiceStyleProfile } from "@/lib/types";
 import { generateVoiceProfile } from "@/lib/anthropic/rewrite";
 
@@ -6,25 +8,32 @@ import { generateVoiceProfile } from "@/lib/anthropic/rewrite";
 
 /** All completed transcript texts for a story, in recording order. */
 export async function getStoryTranscripts(
-  supabase: SupabaseClient,
+  db: Db,
   storyId: string,
 ): Promise<string[]> {
-  const { data: recordings } = await supabase
-    .from("recordings")
-    .select("id, sort_order")
-    .eq("story_id", storyId)
-    .order("sort_order", { ascending: true });
-  if (!recordings?.length) return [];
+  const recordings = await db
+    .select({ id: tables.recordings.id })
+    .from(tables.recordings)
+    .where(eq(tables.recordings.story_id, storyId))
+    .orderBy(asc(tables.recordings.sort_order));
+  if (!recordings.length) return [];
 
   const ids = recordings.map((r) => r.id);
-  const { data: transcripts } = await supabase
-    .from("transcripts")
-    .select("recording_id, text, status")
-    .in("recording_id", ids)
-    .eq("status", "done");
+  const transcripts = await db
+    .select({
+      recording_id: tables.transcripts.recording_id,
+      text: tables.transcripts.text,
+    })
+    .from(tables.transcripts)
+    .where(
+      and(
+        inArray(tables.transcripts.recording_id, ids),
+        eq(tables.transcripts.status, "done"),
+      ),
+    );
 
   const byRecording = new Map<string, string>();
-  (transcripts ?? []).forEach((t) => {
+  transcripts.forEach((t) => {
     if (t.text) byRecording.set(t.recording_id, t.text);
   });
 
@@ -35,32 +44,39 @@ export async function getStoryTranscripts(
 
 /** The user's active voice profile, or null if none yet. */
 export async function getActiveVoiceProfile(
-  supabase: SupabaseClient,
+  db: Db,
   userId: string,
 ): Promise<VoiceStyleProfile | null> {
-  const { data } = await supabase
-    .from("voice_style_profiles")
-    .select("*")
-    .eq("user_id", userId)
-    .eq("is_active", true)
-    .order("version", { ascending: false })
-    .limit(1)
-    .maybeSingle();
-  return (data as VoiceStyleProfile) ?? null;
+  const [row] = await db
+    .select()
+    .from(tables.voice_style_profiles)
+    .where(
+      and(
+        eq(tables.voice_style_profiles.user_id, userId),
+        eq(tables.voice_style_profiles.is_active, true),
+      ),
+    )
+    .orderBy(desc(tables.voice_style_profiles.version))
+    .limit(1);
+  return (row as VoiceStyleProfile | undefined) ?? null;
 }
 
 /** Every completed transcript text for a user (feeds the voice profile). */
 export async function getAllUserTranscripts(
-  supabase: SupabaseClient,
+  db: Db,
   userId: string,
 ): Promise<{ ids: string[]; texts: string[] }> {
-  const { data } = await supabase
-    .from("transcripts")
-    .select("id, text, status")
-    .eq("user_id", userId)
-    .eq("status", "done");
-  const rows = (data ?? []).filter((t) => t.text && t.text.trim());
-  return { ids: rows.map((t) => t.id), texts: rows.map((t) => t.text as string) };
+  const rows = await db
+    .select({ id: tables.transcripts.id, text: tables.transcripts.text })
+    .from(tables.transcripts)
+    .where(
+      and(
+        eq(tables.transcripts.user_id, userId),
+        eq(tables.transcripts.status, "done"),
+      ),
+    );
+  const filled = rows.filter((t) => t.text && t.text.trim());
+  return { ids: filled.map((t) => t.id), texts: filled.map((t) => t.text as string) };
 }
 
 /**
@@ -69,13 +85,13 @@ export async function getAllUserTranscripts(
  * regenerations stay consistent with how the person actually speaks.
  */
 export async function ensureVoiceProfile(
-  supabase: SupabaseClient,
+  db: Db,
   userId: string,
 ): Promise<VoiceStyleProfile | null> {
-  const { ids, texts } = await getAllUserTranscripts(supabase, userId);
+  const { ids, texts } = await getAllUserTranscripts(db, userId);
   if (texts.length === 0) return null;
 
-  const active = await getActiveVoiceProfile(supabase, userId);
+  const active = await getActiveVoiceProfile(db, userId);
   const sameSources =
     active &&
     active.source_transcript_ids.length === ids.length &&
@@ -86,15 +102,19 @@ export async function ensureVoiceProfile(
   const nextVersion = (active?.version ?? 0) + 1;
 
   // Deactivate old, insert new active version.
-  await supabase
-    .from("voice_style_profiles")
-    .update({ is_active: false })
-    .eq("user_id", userId)
-    .eq("is_active", true);
+  await db
+    .update(tables.voice_style_profiles)
+    .set({ is_active: false })
+    .where(
+      and(
+        eq(tables.voice_style_profiles.user_id, userId),
+        eq(tables.voice_style_profiles.is_active, true),
+      ),
+    );
 
-  const { data: inserted } = await supabase
-    .from("voice_style_profiles")
-    .insert({
+  const [inserted] = await db
+    .insert(tables.voice_style_profiles)
+    .values({
       user_id: userId,
       is_active: true,
       version: nextVersion,
@@ -102,8 +122,7 @@ export async function ensureVoiceProfile(
       summary,
       source_transcript_ids: ids,
     })
-    .select("*")
-    .single();
+    .returning();
 
-  return (inserted as VoiceStyleProfile) ?? active;
+  return (inserted as VoiceStyleProfile | undefined) ?? active;
 }

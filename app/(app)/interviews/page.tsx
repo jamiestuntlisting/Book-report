@@ -1,4 +1,6 @@
-import { createClient, getUser } from "@/lib/supabase/server";
+import { desc, eq } from "drizzle-orm";
+import { requireUser } from "@/lib/auth/session";
+import { getDb, tables } from "@/lib/db";
 import { isZoomConfigured } from "@/lib/interview";
 import { requestInterview } from "./actions";
 import { Badge, Button, Input, Label, Textarea } from "@/components/ui";
@@ -16,14 +18,13 @@ const statusTone: Record<InterviewStatus, "gray" | "blue" | "green" | "red"> = {
 };
 
 export default async function InterviewsPage() {
-  const user = await getUser();
-  const supabase = await createClient();
-  const { data } = await supabase
-    .from("interview_appointments")
-    .select("*")
-    .eq("user_id", user!.id)
-    .order("created_at", { ascending: false });
-  const appointments = (data ?? []) as InterviewAppointment[];
+  const user = await requireUser();
+  const rows = await getDb()
+    .select()
+    .from(tables.interview_appointments)
+    .where(eq(tables.interview_appointments.user_id, user.id))
+    .orderBy(desc(tables.interview_appointments.created_at));
+  const appointments = rows as InterviewAppointment[];
   const zoomReady = isZoomConfigured();
 
   return (

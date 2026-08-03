@@ -1,7 +1,8 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { z } from "zod";
-import { getUser, createClient } from "@/lib/supabase/server";
-import { createAdminClient } from "@/lib/supabase/admin";
+import { and, eq, inArray } from "drizzle-orm";
+import { getUser } from "@/lib/auth/session";
+import { getDb, tables, type Db } from "@/lib/db";
 import { createJob, updateJob } from "@/lib/jobs";
 import { generateChapter } from "@/lib/anthropic/rewrite";
 import { CLAUDE_MODEL } from "@/lib/anthropic/client";
@@ -13,7 +14,6 @@ import {
 import { hashString } from "@/lib/utils";
 import type { ChapterGenerationMeta } from "@/lib/types";
 
-export const runtime = "nodejs";
 export const maxDuration = 300;
 
 const schema = z.object({
@@ -34,18 +34,17 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "invalid body" }, { status: 400 });
   }
   const { storyId, guidance, regenerate } = parsed.data;
-  const supabase = await createClient();
-  const admin = createAdminClient();
+  const db = getDb();
+  const nowIso = () => new Date().toISOString();
 
-  const { data: story } = await supabase
-    .from("stories")
-    .select("*")
-    .eq("id", storyId)
-    .eq("user_id", user.id)
-    .maybeSingle();
+  const [story] = await db
+    .select()
+    .from(tables.stories)
+    .where(and(eq(tables.stories.id, storyId), eq(tables.stories.user_id, user.id)))
+    .limit(1);
   if (!story) return NextResponse.json({ error: "story not found" }, { status: 404 });
 
-  const transcripts = await getStoryTranscripts(supabase, storyId);
+  const transcripts = await getStoryTranscripts(db, storyId);
   if (transcripts.length === 0) {
     return NextResponse.json(
       { error: "No transcripts yet. Record and transcribe a memo first." },
@@ -53,29 +52,32 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const jobId = await createJob(admin, {
+  const jobId = await createJob(db, {
     userId: user.id,
     kind: regenerate ? "chapter_regenerate" : "chapter_generate",
     refTable: "stories",
     refId: storyId,
   });
-  await supabase.from("stories").update({ status: "generating" }).eq("id", storyId);
-  await updateJob(admin, jobId, { status: "running" });
+  await db
+    .update(tables.stories)
+    .set({ status: "generating", updated_at: nowIso() })
+    .where(eq(tables.stories.id, storyId));
+  await updateJob(db, jobId, { status: "running" });
 
   try {
     // Keep the voice profile in sync with all transcripts before writing.
-    let voice = await ensureVoiceProfile(supabase, user.id);
-    if (!voice) voice = await getActiveVoiceProfile(supabase, user.id);
+    let voice = await ensureVoiceProfile(db, user.id);
+    if (!voice) voice = await getActiveVoiceProfile(db, user.id);
 
     const text = await generateChapter({
       promptText: story.prompt_text,
       transcripts,
       voice,
       guidance,
-      nameReplacements: (story.name_replacements as Record<string, string>) ?? null,
+      nameReplacements: story.name_replacements ?? null,
     });
 
-    const { transcriptIds } = await gatherTranscriptIds(supabase, storyId);
+    const { transcriptIds } = await gatherTranscriptIds(db, storyId);
     const meta: ChapterGenerationMeta = {
       voice_profile_version: voice?.version,
       transcript_ids: transcriptIds,
@@ -83,80 +85,94 @@ export async function POST(req: NextRequest) {
       guidance,
     };
 
-    const { data: existing } = await supabase
-      .from("chapters")
-      .select("id, generated_text, generation_meta")
-      .eq("story_id", storyId)
-      .maybeSingle();
+    const [existing] = await db
+      .select({
+        id: tables.chapters.id,
+        generated_text: tables.chapters.generated_text,
+        generation_meta: tables.chapters.generation_meta,
+      })
+      .from(tables.chapters)
+      .where(eq(tables.chapters.story_id, storyId))
+      .limit(1);
 
     let chapterId: string;
     if (existing) {
-      const history = (existing.generation_meta as ChapterGenerationMeta | null)?.history ?? [];
+      const history = existing.generation_meta?.history ?? [];
       if (existing.generated_text) {
         history.push({
           text: existing.generated_text,
-          at: new Date().toISOString(),
+          at: nowIso(),
           reason: regenerate ? "regenerate" : "generate",
         });
       }
-      await supabase
-        .from("chapters")
-        .update({
+      await db
+        .update(tables.chapters)
+        .set({
           generated_text: text,
           model: CLAUDE_MODEL,
           generation_meta: { ...meta, history: history.slice(-5) },
           status: "generated",
-          title: existing_title(story.title),
+          title: chapterTitle(story.title),
+          updated_at: nowIso(),
         })
-        .eq("id", existing.id);
+        .where(eq(tables.chapters.id, existing.id));
       chapterId = existing.id;
     } else {
-      const { data: created } = await supabase
-        .from("chapters")
-        .insert({
+      const [created] = await db
+        .insert(tables.chapters)
+        .values({
           user_id: user.id,
           story_id: storyId,
-          title: existing_title(story.title),
+          title: chapterTitle(story.title),
           generated_text: text,
           model: CLAUDE_MODEL,
           generation_meta: meta,
           status: "generated",
         })
-        .select("id")
-        .single();
-      chapterId = created!.id;
+        .returning({ id: tables.chapters.id });
+      chapterId = created.id;
     }
 
-    await supabase.from("stories").update({ status: "ready" }).eq("id", storyId);
-    await updateJob(admin, jobId, { status: "done", result: { chapterId } });
+    await db
+      .update(tables.stories)
+      .set({ status: "ready", updated_at: nowIso() })
+      .where(eq(tables.stories.id, storyId));
+    await updateJob(db, jobId, { status: "done", result: { chapterId } });
 
     return NextResponse.json({ chapterId, text });
   } catch (err) {
     const message = err instanceof Error ? err.message : "generation failed";
-    await supabase.from("stories").update({ status: "draft" }).eq("id", storyId);
-    await updateJob(admin, jobId, { status: "error", error: message });
+    await db
+      .update(tables.stories)
+      .set({ status: "draft", updated_at: nowIso() })
+      .where(eq(tables.stories.id, storyId));
+    await updateJob(db, jobId, { status: "error", error: message });
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }
 
-function existing_title(storyTitle: string): string {
+function chapterTitle(storyTitle: string): string {
   return storyTitle?.slice(0, 120) || "Untitled chapter";
 }
 
 async function gatherTranscriptIds(
-  supabase: Awaited<ReturnType<typeof createClient>>,
+  db: Db,
   storyId: string,
 ): Promise<{ transcriptIds: string[] }> {
-  const { data: recordings } = await supabase
-    .from("recordings")
-    .select("id")
-    .eq("story_id", storyId);
-  const ids = (recordings ?? []).map((r) => r.id);
+  const recordings = await db
+    .select({ id: tables.recordings.id })
+    .from(tables.recordings)
+    .where(eq(tables.recordings.story_id, storyId));
+  const ids = recordings.map((r) => r.id);
   if (ids.length === 0) return { transcriptIds: [] };
-  const { data: transcripts } = await supabase
-    .from("transcripts")
-    .select("id")
-    .in("recording_id", ids)
-    .eq("status", "done");
-  return { transcriptIds: (transcripts ?? []).map((t) => t.id) };
+  const transcripts = await db
+    .select({ id: tables.transcripts.id })
+    .from(tables.transcripts)
+    .where(
+      and(
+        inArray(tables.transcripts.recording_id, ids),
+        eq(tables.transcripts.status, "done"),
+      ),
+    );
+  return { transcriptIds: transcripts.map((t) => t.id) };
 }

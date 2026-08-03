@@ -9,8 +9,8 @@ export interface TranscriptionResult {
 }
 
 export interface TranscriptionInput {
-  /** A publicly-fetchable (signed) URL to the media file. */
-  mediaUrl: string;
+  /** The media bytes (read from R2). */
+  media: Blob;
   mimeType?: string | null;
   fileName?: string;
 }
@@ -20,8 +20,8 @@ export interface Transcriber {
   transcribe(input: TranscriptionInput): Promise<TranscriptionResult>;
 }
 
-// Swap the default provider here (Deepgram, AssemblyAI, a Supabase Edge
-// Function, etc.) — callers depend only on the Transcriber interface.
+// Swap the default provider here (Deepgram, AssemblyAI, Workers AI, etc.) —
+// callers depend only on the Transcriber interface.
 export function getTranscriber(): Transcriber {
   return whisperTranscriber;
 }
