@@ -12,6 +12,8 @@ const PUBLIC_PREFIXES = [
   "/api/auth",
   "/api/webhooks",
   "/api/cron",
+  "/api/admin", // Bearer-token guarded in the route itself
+
   "/api/media", // does its own auth (session, signed URL, or render token)
   "/book/print",
 ];
