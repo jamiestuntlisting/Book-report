@@ -32,9 +32,25 @@ export async function POST(request: NextRequest) {
   if (!sent.ok) {
     console.error("magic link email failed:", sent.error);
     return NextResponse.json(
-      { error: "Couldn't send the email — try again in a minute." },
+      { error: friendlySendError(sent.error ?? "") },
       { status: 502 },
     );
   }
   return NextResponse.json({ ok: true });
+}
+
+// Map common Resend failures to actionable messages (this is shown to the
+// person on the login page, so keep it human).
+function friendlySendError(detail: string): string {
+  const d = detail.toLowerCase();
+  if (d.includes("401") || d.includes("api key is invalid")) {
+    return "Email isn't working: the RESEND_API_KEY looks invalid — re-paste it in the worker's settings.";
+  }
+  if (d.includes("your own email address") || d.includes("verify a domain")) {
+    return "Resend's free test sender can only email the address you signed up to Resend with. Sign in with that email, or verify a domain in Resend.";
+  }
+  if (d.includes("429")) {
+    return "Email limit reached for now — try again in a few minutes.";
+  }
+  return `Couldn't send the email. Resend said: ${detail.slice(0, 160)}`;
 }
