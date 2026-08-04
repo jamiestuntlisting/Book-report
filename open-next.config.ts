@@ -1,5 +1,11 @@
 import { defineCloudflareConfig } from "@opennextjs/cloudflare";
 
-// Default config: no incremental cache backend needed — every page in the app
-// is dynamic (force-dynamic or per-request auth).
-export default defineCloudflareConfig();
+const config = defineCloudflareConfig();
+
+export default {
+  ...config,
+  // Run the Next build directly. The package.json `build` script points at
+  // `opennextjs-cloudflare build` (so Workers Builds' default command works),
+  // and without this override OpenNext would re-invoke that script and recurse.
+  buildCommand: "npx next build",
+};
