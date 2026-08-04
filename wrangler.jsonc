@@ -24,6 +24,9 @@
   "browser": {
     "binding": "BROWSER"
   },
+  "ai": {
+    "binding": "AI"
+  },
   "triggers": {
     // Mondays 17:00 UTC — weekly story reminders.
     "crons": ["0 17 * * 1"]

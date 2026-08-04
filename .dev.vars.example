@@ -8,7 +8,8 @@ AUTH_SECRET=
 # Required — Claude (chapter writing, voice profile, story review)
 ANTHROPIC_API_KEY=
 
-# Required — Whisper transcription
+# Optional — transcription runs on Cloudflare Workers AI by default; set this
+# only to use the OpenAI Whisper API instead (or for plain `next dev`).
 OPENAI_API_KEY=
 
 # Required — login + reminder emails via Resend (free tier is fine)

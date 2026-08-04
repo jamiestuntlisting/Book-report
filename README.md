@@ -77,7 +77,7 @@ cp .dev.vars.example .dev.vars
 | --- | --- |
 | `AUTH_SECRET` | Signs session cookies + media URLs. `openssl rand -hex 32` |
 | `ANTHROPIC_API_KEY` | Claude — chapter rewriting, voice profile, story check |
-| `OPENAI_API_KEY` | Whisper transcription |
+| `OPENAI_API_KEY` | Optional — transcription defaults to Workers AI Whisper; this switches to the OpenAI API |
 | `RESEND_API_KEY` | Login + reminder emails (free tier at resend.com) |
 | `EMAIL_FROM` | Optional custom sender once a domain is verified in Resend |
 | `NEXT_PUBLIC_APP_URL` | Base URL (magic-link + share links) |
