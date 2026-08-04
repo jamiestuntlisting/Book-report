@@ -7,11 +7,13 @@ export const maxDuration = 120;
 // One-time (idempotent) database setup: applies db/schema.sql through the D1
 // binding, so no wrangler login or dashboard SQL console is needed. Every
 // statement uses IF NOT EXISTS / INSERT OR IGNORE, so re-running is safe.
-// Guarded by CRON_SECRET.
-export async function POST(req: NextRequest) {
+// Guarded by CRON_SECRET — either as a Bearer header (POST) or a ?token=
+// query param (GET, so it can be triggered from a browser).
+async function runInit(req: NextRequest) {
   const secret = process.env.CRON_SECRET;
   const auth = req.headers.get("authorization");
-  if (!secret || auth !== `Bearer ${secret}`) {
+  const queryToken = new URL(req.url).searchParams.get("token");
+  if (!secret || (auth !== `Bearer ${secret}` && queryToken !== secret)) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
 
@@ -46,4 +48,12 @@ export async function POST(req: NextRequest) {
     template_questions: questions?.n ?? 0,
     errors,
   });
+}
+
+export async function POST(req: NextRequest) {
+  return runInit(req);
+}
+
+export async function GET(req: NextRequest) {
+  return runInit(req);
 }
