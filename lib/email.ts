@@ -3,7 +3,7 @@
 // Resend account owner's own inbox — fine for a single-author book app.
 import { serverEnv } from "@/lib/env";
 
-const FROM_FALLBACK = "Stuntman Stories <onboarding@resend.dev>";
+const FROM_FALLBACK = "Stunt Biographies <onboarding@resend.dev>";
 
 export function isEmailConfigured(): boolean {
   return Boolean(process.env.RESEND_API_KEY);
@@ -38,11 +38,11 @@ export async function sendEmail(opts: {
 
 export function magicLinkEmail(link: string) {
   return {
-    subject: "Your sign-in link — Stuntman Stories",
-    text: `Click to sign in to Stuntman Stories:\n\n${link}\n\nThis link works once and expires in 15 minutes. If you didn't request it, you can ignore this email.`,
+    subject: "Your sign-in link — Stunt Biographies",
+    text: `Click to sign in to Stunt Biographies:\n\n${link}\n\nThis link works once and expires in 15 minutes. If you didn't request it, you can ignore this email.`,
     html: `
       <div style="font-family:Georgia,serif;max-width:480px;margin:0 auto;padding:24px">
-        <h2 style="margin:0 0 16px">Stuntman Stories</h2>
+        <h2 style="margin:0 0 16px">Stunt Biographies</h2>
         <p>Click the button below to sign in. The link works once and expires in 15 minutes.</p>
         <p style="margin:24px 0">
           <a href="${link}" style="background:#b45309;color:#fff;padding:12px 24px;border-radius:8px;text-decoration:none;font-weight:bold">Sign in</a>

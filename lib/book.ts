@@ -15,6 +15,7 @@ export interface BookChapter {
 
 export interface AssembledBook {
   settings: BookSettings | null;
+  coverUrl: string | null;
   chapters: BookChapter[];
 }
 
@@ -110,5 +111,13 @@ export async function assembleBook(
     });
   }
 
-  return { settings: (settings as BookSettings | undefined) ?? null, chapters: result };
+  const coverUrl = settings?.cover_image_path
+    ? await signedReadUrl("photos", settings.cover_image_path)
+    : null;
+
+  return {
+    settings: (settings as BookSettings | undefined) ?? null,
+    coverUrl,
+    chapters: result,
+  };
 }

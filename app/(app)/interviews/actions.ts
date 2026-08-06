@@ -21,7 +21,7 @@ export async function requestInterview(formData: FormData) {
 
   if (scheduledAt) {
     const meeting = await createInterviewMeeting({
-      topic: "Stuntman Stories interview",
+      topic: "Stunt Biographies interview",
       startTime: scheduledAt,
       timezone,
     });

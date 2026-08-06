@@ -20,7 +20,7 @@ export default async function HomePage() {
   return (
     <main className="mx-auto max-w-3xl px-6 py-20">
       <p className="mb-4 text-sm font-semibold uppercase tracking-widest text-accent">
-        The Death of the Stuntman
+        Stunt Biographies
       </p>
       <h1 className="font-serif text-5xl font-bold leading-tight text-ink">
         You&apos;ve had an incredible career.
@@ -28,9 +28,8 @@ export default async function HomePage() {
         You&apos;ve got a lot of stories to tell.
       </h1>
       <p className="mt-6 max-w-xl text-lg text-ink-soft">
-        Tell them out loud, one short story at a time. We turn your stories
-        into a book — we&apos;ll help you write it, polish it, and organize
-        it, then print it and list it on Amazon.
+        We&apos;ll help you write your book. You tell the stories — we put it
+        together. You get final cut. We handle all the nonsense.
       </p>
 
       <div className="mt-8 flex gap-3">

@@ -26,7 +26,7 @@ export async function POST(request: NextRequest) {
   const code = await issueSmsCode(phone);
   const sent = await sendSms(
     phone,
-    `Your Stuntman Stories sign-in code is ${code}. It expires in 15 minutes.`,
+    `Your Stunt Biographies sign-in code is ${code}. It expires in 15 minutes.`,
   );
   if (!sent.ok) {
     console.error("sms code failed:", sent.error);

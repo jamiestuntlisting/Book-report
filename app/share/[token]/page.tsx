@@ -40,7 +40,7 @@ export default async function SharePage({
     <main className="min-h-screen bg-parchment py-10">
       <BookView book={book} />
       <p className="mx-auto mt-8 max-w-2xl px-10 text-center text-xs text-ink-soft">
-        Made with Stuntman Stories
+        Made with Stunt Biographies
       </p>
     </main>
   );

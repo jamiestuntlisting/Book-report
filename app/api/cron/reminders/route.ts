@@ -65,7 +65,7 @@ export async function GET(req: NextRequest) {
           : `${publicEnv.appUrl}/login`;
         const result = await sendSms(
           p.phone,
-          `Stuntman Stories: got a minute? ${prompt} Tell it here: ${loginUrl}`,
+          `Stunt Biographies: got a minute? ${prompt} Tell it here: ${loginUrl}`,
         );
         if (!result.ok) throw new Error(result.error);
         sent++;

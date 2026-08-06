@@ -5,12 +5,22 @@ import type { AssembledBook } from "@/lib/book";
 // Renders an assembled book as book-style pages. Shared by the in-app preview,
 // the public share view, and the print page that Puppeteer turns into a PDF.
 export function BookView({ book, forPrint = false }: { book: AssembledBook; forPrint?: boolean }) {
-  const { settings, chapters } = book;
+  const { settings, coverUrl, chapters } = book;
 
   return (
     <div className={forPrint ? "book-print" : "mx-auto max-w-2xl bg-white p-10 shadow-sm"}>
       {/* Title page */}
       <section className={forPrint ? "book-page title-page" : "mb-16 text-center"}>
+        {coverUrl && (
+          <Image
+            src={coverUrl}
+            alt="Cover"
+            width={480}
+            height={720}
+            className="mx-auto mb-8 max-h-[28rem] w-auto rounded shadow"
+            unoptimized
+          />
+        )}
         <h1 className="font-serif text-4xl font-bold text-ink">
           {settings?.title ?? "My Stunt Stories"}
         </h1>

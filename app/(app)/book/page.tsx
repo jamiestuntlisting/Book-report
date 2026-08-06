@@ -6,6 +6,7 @@ import { saveBookSettings } from "./actions";
 import { Button, Input, Label, Textarea } from "@/components/ui";
 import { BookView } from "@/components/book/book-view";
 import { BookActions } from "@/components/book/book-actions";
+import { CoverUploader } from "@/components/book/cover-uploader";
 import type { BookSettings } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
@@ -71,6 +72,9 @@ export default async function BookPage() {
             <Button type="submit">Save book details</Button>
           </div>
         </form>
+        <div className="mt-6 border-t border-black/10 pt-4">
+          <CoverUploader coverUrl={book.coverUrl} />
+        </div>
       </details>
 
       <div>

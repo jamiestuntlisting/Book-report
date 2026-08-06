@@ -7,7 +7,7 @@ import { extFromMime } from "@/lib/utils";
 import { recordingPath, photoPath, BUCKETS, mediaKey } from "@/lib/media";
 
 const schema = z.object({
-  purpose: z.enum(["recording", "photo"]),
+  purpose: z.enum(["recording", "photo", "cover"]),
   storyId: z.string().uuid().optional(),
   chapterId: z.string().uuid().optional(),
   kind: z.enum(["audio", "video"]).optional(),
@@ -32,6 +32,12 @@ export async function POST(req: NextRequest) {
 
   let bucket: string;
   let path: string;
+
+  if (purpose === "cover") {
+    bucket = BUCKETS.photos;
+    path = `${user.id}/cover/${id}.${ext}`;
+    return NextResponse.json({ id, bucket, path, key: mediaKey(bucket, path) });
+  }
 
   if (purpose === "recording") {
     if (!storyId || !kind) {

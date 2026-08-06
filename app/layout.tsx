@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Stuntman Stories",
+  title: "Stunt Biographies",
   description:
     "Record the stories from your stunt career and turn them into a book — written in your own voice.",
 };

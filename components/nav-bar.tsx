@@ -26,7 +26,7 @@ export function NavBar({ email }: { email: string }) {
       <div className="mx-auto flex max-w-5xl items-center justify-between px-6 py-3">
         <div className="flex items-center gap-6">
           <Link href="/dashboard" className="font-serif text-lg font-bold text-ink">
-            Stuntman Stories
+            Stunt Biographies
           </Link>
           <nav className="flex gap-1">
             {LINKS.map((l) => (

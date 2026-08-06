@@ -30,3 +30,19 @@ export async function saveBookSettings(formData: FormData) {
 
   revalidatePath("/book");
 }
+
+/** Records the uploaded cover image (path within the photos bucket). */
+export async function saveCoverImage(path: string | null) {
+  const user = await requireUser();
+  const db = getDb();
+  const patch = { cover_image_path: path, updated_at: new Date().toISOString() };
+  const updated = await db
+    .update(tables.book_settings)
+    .set(patch)
+    .where(eq(tables.book_settings.user_id, user.id))
+    .returning({ id: tables.book_settings.id });
+  if (!updated.length) {
+    await db.insert(tables.book_settings).values({ user_id: user.id, ...patch });
+  }
+  revalidatePath("/book");
+}
