@@ -23,24 +23,24 @@ export default async function HomePage() {
         The Death of the Stuntman
       </p>
       <h1 className="font-serif text-5xl font-bold leading-tight text-ink">
-        Your career is a book.
+        You&apos;ve had an incredible career.
         <br />
-        Tell it in your own voice.
+        You&apos;ve got a lot of stories to tell.
       </h1>
       <p className="mt-6 max-w-xl text-lg text-ink-soft">
-        Record the stories from your years on set — just talk. We transcribe
-        them and rewrite each one as a polished chapter in <em>your</em> voice,
-        never inventing a thing. Organize the chapters and print a real book.
+        Tell them out loud, one short story at a time. We turn your stories
+        into a book — we&apos;ll help you write it, polish it, and organize
+        it, then print it and list it on Amazon.
       </p>
 
       <div className="mt-8 flex gap-3">
         {user ? (
           <Link href="/dashboard">
-            <Button size="lg">Go to your stories</Button>
+            <Button size="lg">Keep writing your book</Button>
           </Link>
         ) : (
           <Link href="/login">
-            <Button size="lg">Start your book</Button>
+            <Button size="lg">Start writing your book</Button>
           </Link>
         )}
       </div>
