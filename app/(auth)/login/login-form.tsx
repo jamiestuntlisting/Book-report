@@ -2,14 +2,16 @@
 
 import { useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { createClient } from "@/lib/supabase/client";
-import { publicEnv } from "@/lib/env";
 import { Button, Input, Label } from "@/components/ui";
+
+// Pre-filled default while the app is in testing; clearable as normal.
+// (Must be the Resend account owner's address until a domain is verified.)
+const DEFAULT_EMAIL = "james.northrup@gmail.com";
 
 export function LoginForm() {
   const params = useSearchParams();
   const next = params.get("next") ?? "/dashboard";
-  const [email, setEmail] = useState("");
+  const [email, setEmail] = useState(DEFAULT_EMAIL);
   const [status, setStatus] = useState<"idle" | "sending" | "sent" | "error">(
     "idle",
   );
@@ -19,18 +21,19 @@ export function LoginForm() {
     e.preventDefault();
     setStatus("sending");
     setMessage("");
-    const supabase = createClient();
-    const { error } = await supabase.auth.signInWithOtp({
-      email,
-      options: {
-        emailRedirectTo: `${publicEnv.appUrl}/auth/callback?next=${encodeURIComponent(next)}`,
-      },
+    const res = await fetch("/api/auth/email", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email, next }),
     });
-    if (error) {
-      setStatus("error");
-      setMessage(error.message);
-    } else {
+    if (res.ok) {
       setStatus("sent");
+    } else {
+      const body = (await res.json().catch(() => null)) as {
+        error?: string;
+      } | null;
+      setStatus("error");
+      setMessage(body?.error ?? "Something went wrong — try again.");
     }
   }
 

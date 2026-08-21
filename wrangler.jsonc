@@ -1,0 +1,37 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "stuntman-stories",
+  "main": "worker.ts",
+  "compatibility_date": "2026-07-01",
+  "compatibility_flags": ["nodejs_compat"],
+  "assets": {
+    "directory": ".open-next/assets",
+    "binding": "ASSETS"
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "stuntman-stories",
+      "database_id": "7150857d-f7f0-4e83-93d7-0c30f8aaa870"
+    }
+  ],
+  "r2_buckets": [
+    {
+      "binding": "MEDIA",
+      "bucket_name": "stuntman-media"
+    }
+  ],
+  "browser": {
+    "binding": "BROWSER"
+  },
+  "ai": {
+    "binding": "AI"
+  },
+  "triggers": {
+    // Mondays 17:00 UTC — weekly story reminders.
+    "crons": ["0 17 * * 1"]
+  },
+  "observability": {
+    "enabled": true
+  }
+}

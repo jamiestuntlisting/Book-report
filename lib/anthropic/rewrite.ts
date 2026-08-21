@@ -58,6 +58,7 @@ export async function generateChapter(params: {
   transcripts: string[];
   voice: VoiceStyleProfile | null;
   guidance?: string;
+  nameReplacements?: Record<string, string> | null;
 }): Promise<string> {
   const client = getAnthropic();
   const message = await client.messages.create({
@@ -76,6 +77,7 @@ export async function appendToChapter(params: {
   existingChapter: string;
   newTranscripts: string[];
   voice: VoiceStyleProfile | null;
+  nameReplacements?: Record<string, string> | null;
 }): Promise<string> {
   const client = getAnthropic();
   const message = await client.messages.create({

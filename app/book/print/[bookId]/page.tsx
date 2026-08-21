@@ -1,5 +1,5 @@
 import { notFound } from "next/navigation";
-import { createAdminClient } from "@/lib/supabase/admin";
+import { getDb } from "@/lib/db";
 import { assembleBook } from "@/lib/book";
 import { serverEnv } from "@/lib/env";
 import { BookView } from "@/components/book/book-view";
@@ -7,8 +7,8 @@ import "./print.css";
 
 export const dynamic = "force-dynamic";
 
-// The page Puppeteer loads to render the print-ready PDF. `bookId` is the
-// user's id; access is gated by a short-lived render token so it isn't public.
+// The page the PDF renderer loads. `bookId` is the user's id; access is gated
+// by a short-lived render token so it isn't public.
 export default async function PrintPage({
   params,
   searchParams,
@@ -21,8 +21,7 @@ export default async function PrintPage({
 
   if (!token || token !== serverEnv.pdfRenderToken) notFound();
 
-  const admin = createAdminClient();
-  const book = await assembleBook(admin, bookId);
+  const book = await assembleBook(getDb(), bookId);
 
   return <BookView book={book} forPrint />;
 }

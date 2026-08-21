@@ -1,5 +1,7 @@
 import Link from "next/link";
-import { createClient, getUser } from "@/lib/supabase/server";
+import { asc, eq } from "drizzle-orm";
+import { requireUser } from "@/lib/auth/session";
+import { getDb, tables } from "@/lib/db";
 import { Button } from "@/components/ui";
 import { StoryTable } from "@/components/dashboard/story-table";
 import type { Chapter, Story } from "@/lib/types";
@@ -7,25 +9,30 @@ import type { Chapter, Story } from "@/lib/types";
 export const dynamic = "force-dynamic";
 
 export default async function DashboardPage() {
-  const user = await getUser();
-  const supabase = await createClient();
+  const user = await requireUser();
+  const db = getDb();
 
-  const { data: stories } = await supabase
-    .from("stories")
-    .select("*")
-    .eq("user_id", user!.id)
-    .order("sort_order", { ascending: true });
+  const stories = await db
+    .select()
+    .from(tables.stories)
+    .where(eq(tables.stories.user_id, user.id))
+    .orderBy(asc(tables.stories.sort_order));
 
-  const { data: chapters } = await supabase
-    .from("chapters")
-    .select("id, story_id, status");
+  const chapters = await db
+    .select({
+      id: tables.chapters.id,
+      story_id: tables.chapters.story_id,
+      status: tables.chapters.status,
+    })
+    .from(tables.chapters)
+    .where(eq(tables.chapters.user_id, user.id));
 
   const chapterByStory = new Map<string, Pick<Chapter, "id" | "status">>();
-  (chapters ?? []).forEach((c) =>
+  chapters.forEach((c) =>
     chapterByStory.set(c.story_id, { id: c.id, status: c.status }),
   );
 
-  const list = (stories ?? []) as Story[];
+  const list = stories as Story[];
 
   return (
     <div>

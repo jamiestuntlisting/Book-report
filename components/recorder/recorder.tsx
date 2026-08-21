@@ -3,7 +3,7 @@
 import { useCallback, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Mic, Video, Square, Upload } from "lucide-react";
-import { createClient } from "@/lib/supabase/client";
+import { uploadMedia } from "@/lib/upload-client";
 import { Button } from "@/components/ui";
 import { formatDuration } from "@/lib/utils";
 
@@ -76,13 +76,9 @@ export function Recorder({ storyId }: { storyId: string }) {
         body: JSON.stringify({ purpose: "recording", storyId, kind, mimeType }),
       });
       if (!signRes.ok) throw new Error((await signRes.json()).error ?? "sign failed");
-      const { id, bucket, path, token } = await signRes.json();
+      const { id, bucket, path, key } = await signRes.json();
 
-      const supabase = createClient();
-      const { error: upErr } = await supabase.storage
-        .from(bucket)
-        .uploadToSignedUrl(path, token, blob, { contentType: mimeType });
-      if (upErr) throw new Error(upErr.message);
+      await uploadMedia(key, blob, mimeType);
 
       const recRes = await fetch("/api/recordings", {
         method: "POST",
@@ -214,12 +210,8 @@ function FileFallback({
         body: JSON.stringify({ purpose: "recording", storyId, kind, mimeType }),
       });
       if (!signRes.ok) throw new Error((await signRes.json()).error ?? "sign failed");
-      const { id, bucket, path, token } = await signRes.json();
-      const supabase = createClient();
-      const { error: upErr } = await supabase.storage
-        .from(bucket)
-        .uploadToSignedUrl(path, token, file, { contentType: mimeType });
-      if (upErr) throw new Error(upErr.message);
+      const { id, bucket, path, key } = await signRes.json();
+      await uploadMedia(key, file, mimeType);
       await fetch("/api/recordings", {
         method: "POST",
         headers: { "Content-Type": "application/json" },

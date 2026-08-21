@@ -1,0 +1,42 @@
+# Copy to .dev.vars for local `wrangler dev` / `npm run preview`, and mirror
+# these as Secrets on the Worker (Settings → Variables & Secrets) in production.
+# For `next dev`, put the same values in .env.local.
+
+# Required — session-cookie signing secret. Generate: openssl rand -hex 32
+AUTH_SECRET=
+
+# Required — Claude (chapter writing, voice profile, story review)
+ANTHROPIC_API_KEY=
+
+# Optional — transcription runs on Cloudflare Workers AI by default; set this
+# only to use the OpenAI Whisper API instead (or for plain `next dev`).
+OPENAI_API_KEY=
+
+# Required — login + reminder emails via Resend (free tier is fine)
+RESEND_API_KEY=
+# Optional custom sender once you verify a domain in Resend,
+# e.g. "Stuntman Stories <stories@yourdomain.com>"
+EMAIL_FROM=
+
+# Required — protects the private print route used by the PDF renderer.
+PDF_RENDER_TOKEN=
+
+# Required — protects the weekly-reminder cron route.
+CRON_SECRET=
+
+# The app's public URL (your workers.dev URL or custom domain).
+NEXT_PUBLIC_APP_URL=http://localhost:3000
+
+# Optional — name verification against TMDB in story review.
+TMDB_API_KEY=
+
+# Optional — texted login codes + SMS reminders.
+TWILIO_ACCOUNT_SID=
+TWILIO_AUTH_TOKEN=
+TWILIO_FROM_NUMBER=
+
+# Optional — Zoom interview ingestion.
+ZOOM_ACCOUNT_ID=
+ZOOM_CLIENT_ID=
+ZOOM_CLIENT_SECRET=
+ZOOM_WEBHOOK_SECRET_TOKEN=

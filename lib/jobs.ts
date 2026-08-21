@@ -1,13 +1,15 @@
-import type { SupabaseClient } from "@supabase/supabase-js";
+import { eq } from "drizzle-orm";
+import type { Db } from "@/lib/db";
+import { tables } from "@/lib/db";
 import type { JobStatus } from "@/lib/types";
 
 // Thin helper around the `jobs` table so long-running work (transcription, AI
 // generation) is tracked consistently. Today the work runs inline in Route
-// Handlers; this abstraction lets it move to a queue/Edge Function later
-// without changing callers.
+// Handlers; this abstraction lets it move to a Queue later without changing
+// callers.
 
 export async function createJob(
-  admin: SupabaseClient,
+  db: Db,
   params: {
     userId: string | null;
     kind: string;
@@ -15,23 +17,25 @@ export async function createJob(
     refId?: string;
   },
 ): Promise<string | null> {
-  const { data, error } = await admin
-    .from("jobs")
-    .insert({
-      user_id: params.userId,
-      kind: params.kind,
-      ref_table: params.refTable ?? null,
-      ref_id: params.refId ?? null,
-      status: "queued" as JobStatus,
-    })
-    .select("id")
-    .single();
-  if (error) return null;
-  return data.id;
+  try {
+    const [row] = await db
+      .insert(tables.jobs)
+      .values({
+        user_id: params.userId,
+        kind: params.kind,
+        ref_table: params.refTable ?? null,
+        ref_id: params.refId ?? null,
+        status: "queued" as JobStatus,
+      })
+      .returning({ id: tables.jobs.id });
+    return row?.id ?? null;
+  } catch {
+    return null;
+  }
 }
 
 export async function updateJob(
-  admin: SupabaseClient,
+  db: Db,
   jobId: string | null,
   patch: {
     status?: JobStatus;
@@ -40,8 +44,8 @@ export async function updateJob(
   },
 ): Promise<void> {
   if (!jobId) return;
-  await admin
-    .from("jobs")
-    .update({ ...patch, updated_at: new Date().toISOString() })
-    .eq("id", jobId);
+  await db
+    .update(tables.jobs)
+    .set({ ...patch, updated_at: new Date().toISOString() })
+    .where(eq(tables.jobs.id, jobId));
 }

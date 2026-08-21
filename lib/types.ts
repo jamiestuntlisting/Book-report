@@ -1,5 +1,5 @@
-// Domain types mirroring the Postgres schema (supabase/migrations/0001_init.sql).
-// Kept hand-written for clarity; regenerate with `supabase gen types` if desired.
+// Domain types mirroring the D1 schema (lib/db/schema.ts / db/schema.sql).
+// Kept hand-written for clarity.
 
 export type StoryStatus =
   | "draft"
@@ -26,6 +26,9 @@ export interface Profile {
   email: string | null;
   avatar_url: string | null;
   bio: string | null;
+  phone: string | null;
+  reminder_opt_in: boolean;
+  reminder_channel: "sms" | "email";
   created_at: string;
   updated_at: string;
 }
@@ -48,6 +51,7 @@ export interface Story {
   chapter_number: number | null;
   sort_order: number;
   include_in_book: boolean;
+  name_replacements: Record<string, string>;
   created_at: string;
   updated_at: string;
 }
@@ -196,6 +200,84 @@ export interface InterviewAppointment {
   scheduling_ref: string | null;
   recording_id: string | null;
   notes: string | null;
+  created_at: string;
+}
+
+// ---- Story review ----
+
+export type FindingStatus = "open" | "applied" | "dismissed";
+
+export interface MissingDetailFinding {
+  id: string;
+  status: FindingStatus;
+  question: string;
+  why: string;
+}
+
+export interface UnclearFinding {
+  id: string;
+  status: FindingStatus;
+  quote: string;
+  issue: string;
+  suggestion: string;
+}
+
+export interface JargonFinding {
+  id: string;
+  status: FindingStatus;
+  found: string;
+  suggested: string;
+  confidence: "high" | "medium" | "low";
+}
+
+export interface ToneFinding {
+  id: string;
+  status: FindingStatus;
+  quote: string;
+  why: string;
+  rewrite: string;
+}
+
+export interface PerspectiveFinding {
+  id: string;
+  status: FindingStatus;
+  quote: string;
+  fix: string;
+}
+
+export interface TmdbCandidate {
+  name: string;
+  known_for: string;
+  department: string | null;
+  is_stunts: boolean;
+  profile_url: string | null;
+  imdb_url: string | null;
+}
+
+export interface NameFinding {
+  id: string;
+  status: FindingStatus;
+  name: string;
+  context: string;
+  candidates: TmdbCandidate[];
+}
+
+export interface ReviewFindings {
+  missing_details: MissingDetailFinding[];
+  unclear: UnclearFinding[];
+  jargon: JargonFinding[];
+  tone: ToneFinding[];
+  perspective: PerspectiveFinding[];
+  names: NameFinding[];
+}
+
+export interface StoryReview {
+  id: string;
+  user_id: string;
+  story_id: string;
+  chapter_id: string | null;
+  findings: ReviewFindings;
+  model: string | null;
   created_at: string;
 }
 

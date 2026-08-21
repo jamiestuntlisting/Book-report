@@ -1,6 +1,8 @@
-import type { SupabaseClient } from "@supabase/supabase-js";
+import { inArray, and, eq, asc } from "drizzle-orm";
+import type { Db } from "@/lib/db";
+import { tables } from "@/lib/db";
 import type { BookSettings, Chapter, ChapterLink, Photo, Story } from "@/lib/types";
-import { signedReadUrl } from "@/lib/storage";
+import { signedReadUrl } from "@/lib/media";
 import { qrDataUrl } from "@/lib/qr";
 
 export interface BookChapter {
@@ -13,32 +15,37 @@ export interface BookChapter {
 
 export interface AssembledBook {
   settings: BookSettings | null;
+  coverUrl: string | null;
   chapters: BookChapter[];
 }
 
 /**
- * Gathers everything needed to render a user's book, in chapter order. Works
- * with either the session client (owner preview) or the admin client (public
- * share / PDF render), since it only reads by user_id.
+ * Gathers everything needed to render a user's book, in chapter order. Photo
+ * URLs are signed so the owner preview, public share page, and PDF renderer
+ * can all use plain <img> tags. Signed URLs outlive the render (1 hour).
  */
 export async function assembleBook(
-  supabase: SupabaseClient,
+  db: Db,
   userId: string,
 ): Promise<AssembledBook> {
-  const { data: settings } = await supabase
-    .from("book_settings")
-    .select("*")
-    .eq("user_id", userId)
-    .maybeSingle();
+  const [settings] = await db
+    .select()
+    .from(tables.book_settings)
+    .where(eq(tables.book_settings.user_id, userId))
+    .limit(1);
 
-  const { data: stories } = await supabase
-    .from("stories")
-    .select("*")
-    .eq("user_id", userId)
-    .eq("include_in_book", true);
+  const stories = (await db
+    .select()
+    .from(tables.stories)
+    .where(
+      and(
+        eq(tables.stories.user_id, userId),
+        eq(tables.stories.include_in_book, true),
+      ),
+    )) as Story[];
 
   // Order by chapter_number when set, otherwise sort_order.
-  const ordered = ((stories ?? []) as Story[]).sort((a, b) => {
+  const ordered = stories.sort((a, b) => {
     const an = a.chapter_number ?? Number.MAX_SAFE_INTEGER;
     const bn = b.chapter_number ?? Number.MAX_SAFE_INTEGER;
     if (an !== bn) return an - bn;
@@ -46,19 +53,30 @@ export async function assembleBook(
   });
 
   const storyIds = ordered.map((s) => s.id);
-  const { data: chapters } = storyIds.length
-    ? await supabase.from("chapters").select("*").in("story_id", storyIds)
-    : { data: [] };
+  const chapters = storyIds.length
+    ? ((await db
+        .select()
+        .from(tables.chapters)
+        .where(inArray(tables.chapters.story_id, storyIds))) as Chapter[])
+    : [];
   const chapterByStory = new Map<string, Chapter>();
-  ((chapters ?? []) as Chapter[]).forEach((c) => chapterByStory.set(c.story_id, c));
+  chapters.forEach((c) => chapterByStory.set(c.story_id, c));
 
-  const chapterIds = ((chapters ?? []) as Chapter[]).map((c) => c.id);
-  const { data: photos } = chapterIds.length
-    ? await supabase.from("photos").select("*").in("chapter_id", chapterIds).order("position")
-    : { data: [] };
-  const { data: links } = chapterIds.length
-    ? await supabase.from("chapter_links").select("*").in("chapter_id", chapterIds).order("position")
-    : { data: [] };
+  const chapterIds = chapters.map((c) => c.id);
+  const photos = chapterIds.length
+    ? ((await db
+        .select()
+        .from(tables.photos)
+        .where(inArray(tables.photos.chapter_id, chapterIds))
+        .orderBy(asc(tables.photos.position))) as Photo[])
+    : [];
+  const links = chapterIds.length
+    ? ((await db
+        .select()
+        .from(tables.chapter_links)
+        .where(inArray(tables.chapter_links.chapter_id, chapterIds))
+        .orderBy(asc(tables.chapter_links.position))) as ChapterLink[])
+    : [];
 
   const result: BookChapter[] = [];
   for (const story of ordered) {
@@ -67,10 +85,10 @@ export async function assembleBook(
     if (!text.trim()) continue; // skip stories without a written chapter
 
     const chapterPhotos = chapter
-      ? ((photos ?? []) as Photo[]).filter((p) => p.chapter_id === chapter.id)
+      ? photos.filter((p) => p.chapter_id === chapter.id)
       : [];
     const chapterLinks = chapter
-      ? ((links ?? []) as ChapterLink[]).filter((l) => l.chapter_id === chapter.id)
+      ? links.filter((l) => l.chapter_id === chapter.id)
       : [];
 
     result.push({
@@ -79,7 +97,7 @@ export async function assembleBook(
       text,
       photos: await Promise.all(
         chapterPhotos.map(async (p) => ({
-          url: await signedReadUrl(supabase, p.storage_bucket, p.storage_path),
+          url: await signedReadUrl(p.storage_bucket, p.storage_path),
           caption: p.caption,
         })),
       ),
@@ -93,5 +111,13 @@ export async function assembleBook(
     });
   }
 
-  return { settings: (settings as BookSettings) ?? null, chapters: result };
+  const coverUrl = settings?.cover_image_path
+    ? await signedReadUrl("photos", settings.cover_image_path)
+    : null;
+
+  return {
+    settings: (settings as BookSettings | undefined) ?? null,
+    coverUrl,
+    chapters: result,
+  };
 }

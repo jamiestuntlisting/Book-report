@@ -1,8 +1,8 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { z } from "zod";
-import { getUser, createClient } from "@/lib/supabase/server";
-
-export const runtime = "nodejs";
+import { and, desc, eq } from "drizzle-orm";
+import { getUser } from "@/lib/auth/session";
+import { getDb, tables } from "@/lib/db";
 
 const schema = z.object({
   id: z.string().uuid(),
@@ -15,8 +15,8 @@ const schema = z.object({
   durationSeconds: z.number().optional(),
 });
 
-// Registers a recording row after the file has been uploaded to Storage, and
-// moves the story into the 'transcribing' state. The client then calls
+// Registers a recording row after the file has been uploaded to R2, and moves
+// the story into the 'transcribing' state. The client then calls
 // /api/transcribe with the returned recording id.
 export async function POST(req: NextRequest) {
   const user = await getUser();
@@ -27,27 +27,27 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "invalid body" }, { status: 400 });
   }
   const body = parsed.data;
-  const supabase = await createClient();
+  const db = getDb();
 
-  const { data: story } = await supabase
-    .from("stories")
-    .select("id")
-    .eq("id", body.storyId)
-    .eq("user_id", user.id)
-    .maybeSingle();
+  const [story] = await db
+    .select({ id: tables.stories.id })
+    .from(tables.stories)
+    .where(
+      and(eq(tables.stories.id, body.storyId), eq(tables.stories.user_id, user.id)),
+    )
+    .limit(1);
   if (!story) return NextResponse.json({ error: "story not found" }, { status: 404 });
 
-  const { data: last } = await supabase
-    .from("recordings")
-    .select("sort_order")
-    .eq("story_id", body.storyId)
-    .order("sort_order", { ascending: false })
-    .limit(1)
-    .maybeSingle();
+  const [last] = await db
+    .select({ sort_order: tables.recordings.sort_order })
+    .from(tables.recordings)
+    .where(eq(tables.recordings.story_id, body.storyId))
+    .orderBy(desc(tables.recordings.sort_order))
+    .limit(1);
 
-  const { data: recording, error } = await supabase
-    .from("recordings")
-    .insert({
+  const [recording] = await db
+    .insert(tables.recordings)
+    .values({
       id: body.id,
       user_id: user.id,
       story_id: body.storyId,
@@ -60,15 +60,12 @@ export async function POST(req: NextRequest) {
       source: "self_recorded",
       sort_order: (last?.sort_order ?? 0) + 1,
     })
-    .select("*")
-    .single();
+    .returning();
 
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-
-  await supabase
-    .from("stories")
-    .update({ status: "transcribing" })
-    .eq("id", body.storyId);
+  await db
+    .update(tables.stories)
+    .set({ status: "transcribing", updated_at: new Date().toISOString() })
+    .where(eq(tables.stories.id, body.storyId));
 
   return NextResponse.json({ recording });
 }
