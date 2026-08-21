@@ -4,10 +4,13 @@ import { useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { Button, Input, Label } from "@/components/ui";
 
+// Pre-filled default while the app is in testing; clearable as normal.
+const DEFAULT_EMAIL = "jamie@stuntlisting.com";
+
 export function LoginForm() {
   const params = useSearchParams();
   const next = params.get("next") ?? "/dashboard";
-  const [email, setEmail] = useState("");
+  const [email, setEmail] = useState(DEFAULT_EMAIL);
   const [status, setStatus] = useState<"idle" | "sending" | "sent" | "error">(
     "idle",
   );
