@@ -5,7 +5,8 @@ import { useSearchParams } from "next/navigation";
 import { Button, Input, Label } from "@/components/ui";
 
 // Pre-filled default while the app is in testing; clearable as normal.
-const DEFAULT_EMAIL = "jamie@stuntlisting.com";
+// (Must be the Resend account owner's address until a domain is verified.)
+const DEFAULT_EMAIL = "james.northrup@gmail.com";
 
 export function LoginForm() {
   const params = useSearchParams();
